@@ -28,17 +28,17 @@ class ImageDataset(Dataset):
         self.train = train
         self.image_path = image_path
         self.label_path = label_path
-        if not self.train:
-            self.gallery_path = gallery_path
-
         self.label = pd.read_csv(self.label_path, header=None, names=["id", "img_file"])
 
-        # id remapping
-        self.id2idx = {}
-        for idx, id in enumerate(self.label.id.unique()):
-            self.id2idx[id] = idx
-        self.idx2id = {v: k for k, v in self.id2idx.items()}
-        self.label.id = self.label.id.apply(lambda x: self.id2idx[x])
+        if not self.train:
+            self.gallery_path = gallery_path
+        else:
+            # id remapping
+            self.id2idx = {}
+            for idx, id in enumerate(self.label.id.unique()):
+                self.id2idx[id] = idx
+            self.idx2id = {v: k for k, v in self.id2idx.items()}
+            self.label.id = self.label.id.apply(lambda x: self.id2idx[x])
 
         if transform is not None:
             self.transform = transform
@@ -79,6 +79,18 @@ class ImageDataset(Dataset):
     def get_num_classes(self):
         return len(self.id2idx)
 
+    def get_gallery(self):
+        data = pd.read_csv(self.gallery_path, header=None, names=["id", "img_file"])
+        labels = torch.from_numpy(data.id.values)
+        images = []
+        for image in data.img_file:
+            image = Image.open(os.path.join(self.image_path, image))
+            image = self.transform(image)
+            images.append(image)
+        images = torch.stack(images)
+
+        return images, labels
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tiger Re-ID dataset.")
@@ -86,19 +98,22 @@ if __name__ == "__main__":
     parser.add_argument("label_path", type=str, help="Path to label file.")
     parser.add_argument("--gallery", type=str, help="Path to gallery file.")
     parser.add_argument(
-        "--train", action="store_false", help="Whether dataset is train or test."
+        "--test", action="store_false", help="Whether dataset is train or test."
     )
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
     parser.add_argument("--num_worker", type=int, default=0, help="Number of worker.")
 
     args = parser.parse_args()
 
-    dataset = ImageDataset(args.image_dir, args.label_path, train=args.train)
+    dataset = ImageDataset(
+        args.image_dir, args.label_path, train=args.test, gallery_path=args.gallery
+    )
     dataloader = DataLoader(
         dataset, shuffle=False, batch_size=args.batch_size, num_workers=args.num_worker
     )
 
     data = next(iter(dataloader))
+    # data = dataset.get_gallery()
     plt.figure(figsize=(8, 8))
     plt.axis("off")
     plt.title("Training Images")
