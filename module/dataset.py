@@ -76,6 +76,9 @@ class ImageDataset(Dataset):
 
         return image, label
 
+    def get_num_classes(self):
+        return len(self.id2idx)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tiger Re-ID dataset.")
