@@ -39,3 +39,28 @@ class MulticlassAccuracy(Metrics):
     def print_score(self):
         score = self.get_score()
         return "{:.5f}".format(score)
+
+
+class Accuracy(Metrics):
+    """ Accuracy
+    """
+
+    def __init__(self):
+        self.name = "Rank 1"
+        self.n_correct = 0
+        self.n = 1e-20
+
+    def reset(self):
+        self.n_correct = 0
+        self.n = 1e-20
+
+    def update(self, predicts, targets):
+        self.n_correct += (predicts == targets).sum().item()
+        self.n += targets.shape[0]
+
+    def get_score(self):
+        return self.n_correct / self.n
+
+    def print_score(self):
+        score = self.get_score()
+        return "{:.5f}".format(score)
