@@ -17,7 +17,7 @@ class ReIDNET(nn.Module):
         self.backbone = nn.Sequential(*(list(backbone.children())[:-1]))
 
         self.classifier = nn.Sequential(
-            Flatten(), nn.Linear(2048 * 6 * 6, self.num_classes), nn.LogSoftmax(dim=1)
+            Flatten(), nn.Linear(2048 * 10 * 10, self.num_classes), nn.LogSoftmax(dim=1)
         )
 
     def forward(self, x):
