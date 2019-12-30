@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
-SIZE = [384, 384]
+SIZE = [512, 512]
 DEGREE = 10
 BRIGHT_PROB = 0.2
 SATURA_PROB = 0.2
@@ -22,9 +22,7 @@ PADDING = 10
 
 
 class ImageDataset(Dataset):
-    def __init__(
-        self, image_path, label_path, gallery_path=None, train=True, transform=None
-    ):
+    def __init__(self, image_path, label_path, gallery_path=None, train=True, transform=None):
         self.train = train
         self.image_path = image_path
         self.label_path = label_path
@@ -61,9 +59,7 @@ class ImageDataset(Dataset):
                     ]
                 )
             else:
-                self.transform = T.Compose(
-                    [T.Resize(SIZE), T.ToTensor(), T.Normalize(MEAN, STD)]
-                )
+                self.transform = T.Compose([T.Resize(SIZE), T.ToTensor(), T.Normalize(MEAN, STD)])
 
     def __len__(self):
         return self.label.shape[0]
@@ -97,9 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("image_dir", type=str, help="Path to image directory.")
     parser.add_argument("label_path", type=str, help="Path to label file.")
     parser.add_argument("--gallery", type=str, help="Path to gallery file.")
-    parser.add_argument(
-        "--test", action="store_false", help="Whether dataset is train or test."
-    )
+    parser.add_argument("--test", action="store_false", help="Whether dataset is train or test.")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
     parser.add_argument("--num_worker", type=int, default=0, help="Number of worker.")
 
@@ -119,8 +113,7 @@ if __name__ == "__main__":
     plt.title("Training Images")
     plt.imshow(
         np.transpose(
-            vutils.make_grid(data[0].to("cpu")[:64], padding=2, normalize=True).cpu(),
-            (1, 2, 0),
+            vutils.make_grid(data[0].to("cpu")[:64], padding=2, normalize=True).cpu(), (1, 2, 0),
         ),
     )
     plt.show()
