@@ -1,1 +1,7 @@
 data
+__pycache__
+final_data
+log
+model_log
+output_dir
+models

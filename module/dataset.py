@@ -103,6 +103,6 @@ if __name__ == "__main__":
         np.transpose(
             vutils.make_grid(data[0].to("cpu")[:64], padding=2, normalize=True).cpu(),
             (1, 2, 0),
-        ),
+        )
     )
     plt.show()

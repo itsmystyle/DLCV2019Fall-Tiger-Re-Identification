@@ -7,5 +7,5 @@
     "python.linting.flake8Args": [
         "--max-line-length=100"
     ],
-    "python.pythonPath": "/home/ywuanchai/.pyenv/versions/p36/bin/python",
+    "python.pythonPath": "/home/henry0122/anaconda3/envs/dlcv/bin/python",
 }
