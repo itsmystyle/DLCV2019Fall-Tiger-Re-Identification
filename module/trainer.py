@@ -10,7 +10,15 @@ from tensorboardX import SummaryWriter
 from sklearn.metrics.pairwise import cosine_distances
 
 from dataset import ImageDataset
-from model import ResNet152, SeResNet50, ResNetArcFaceModel, SeResNetArcFaceModel
+from model import (
+    ResNet152,
+    SeResNet50,
+    SeResNet152,
+    SeResNeXt50,
+    ResNetArcFaceModel,
+    SeResNetArcFaceModel,
+    SeResNeXtArcFaceModel,
+)
 from metrics import MulticlassAccuracy, Accuracy
 from loss import CrossEntropyLabelSmooth
 from utils import set_random_seed
@@ -86,6 +94,7 @@ class Trainer:
             if self.model.__class__.__name__ in [
                 "ResNetArcFaceModel",
                 "SeResNetArcFaceModel",
+                "SeResNeXtArcFaceModel",
             ]:
                 preds = self.model(images, labels)
             else:
@@ -230,6 +239,10 @@ if __name__ == "__main__":
         model = ResNet152(train_dataset.get_num_classes())
     elif args.model == "seresnet50":
         model = SeResNet50(train_dataset.get_num_classes(), 512)
+    elif args.model == "seresnet152":
+        model = SeResNet152(train_dataset.get_num_classes(), 512)
+    elif args.model == "seresnext50":
+        model = SeResNeXt50(train_dataset.get_num_classes(), 512)
     elif args.model == "resnet_arcface":
         model = ResNetArcFaceModel(
             train_dataset.get_num_classes(), 30, 0.5, 512, True, device=device,
@@ -237,6 +250,14 @@ if __name__ == "__main__":
     elif args.model == "seresnet_arcface":
         model = SeResNetArcFaceModel(
             train_dataset.get_num_classes(), 30, 0.5, 512, True, device=device,
+        )
+    elif args.model == "seresnext50_arcface":
+        model = SeResNeXtArcFaceModel(
+            train_dataset.get_num_classes(), 30, 0.5, 512, 50, True, device=device,
+        )
+    elif args.model == "seresnext101_arcface":
+        model = SeResNeXtArcFaceModel(
+            train_dataset.get_num_classes(), 30, 0.5, 512, 101, True, device=device,
         )
 
     # prepare optimizer
