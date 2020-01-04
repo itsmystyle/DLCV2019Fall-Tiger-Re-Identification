@@ -5,6 +5,7 @@ from pretrainedmodels.models import (
     se_resnext50_32x4d,
     se_resnext101_32x4d,
     se_resnet152,
+    nasnetalarge,
 )
 
 from module.layers.utils import Flatten
@@ -136,6 +137,45 @@ class SeResNeXt50(nn.Module):
 
     def _init_params(self):
         nn.init.xavier_normal_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0)
+        nn.init.constant_(self.bn.weight, 1)
+        nn.init.constant_(self.bn.bias, 0)
+
+    def forward(self, x):
+        x = self.extract_features(x)
+        x = self.classifier(x)
+
+        return x
+
+    def extract_features(self, x):
+        x = self.backbone.features(x)
+        x = self.backbone.avg_pool(x).view(x.shape[0], -1)
+        x = self.fc(x)
+        x = self.bn(x)
+
+        return x
+
+
+class NASNet(nn.Module):
+    def __init__(self, num_classes, fc_dim):
+        super(NASNet, self).__init__()
+
+        self.num_classes = num_classes
+        self.fc_dim = fc_dim
+
+        self.backbone = nasnetalarge(num_classes=1000, pretrained="imagenet")
+        final_in_features = self.backbone.last_linear.in_features
+
+        self.fc = nn.Linear(final_in_features * 6 * 6, self.fc_dim)
+        self.bn = nn.BatchNorm1d(self.fc_dim)
+        self._init_params()
+
+        self.classifier = nn.Sequential(
+            nn.Linear(self.fc_dim, self.num_classes), nn.LogSoftmax(dim=1)
+        )
+
+    def _init_params(self):
+        nn.init.kaiming_normal_(self.fc.weight)
         nn.init.constant_(self.fc.bias, 0)
         nn.init.constant_(self.bn.weight, 1)
         nn.init.constant_(self.bn.bias, 0)
