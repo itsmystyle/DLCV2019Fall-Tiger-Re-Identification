@@ -15,17 +15,17 @@ class CrossEntropyLabelSmooth(nn.Module):
         epsilon (float): weight.
     """
 
-    def __init__(self, num_classes, epsilon=0.1):
+    def __init__(self, num_classes, epsilon=0.1, device="cpu"):
         super(CrossEntropyLabelSmooth, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon
+        self.device = device
 
     def forward(self, inputs, targets):
-        device = targets.device
         targets = (
             torch.zeros(inputs.shape)
             .scatter_(1, targets.unsqueeze(1).cpu(), 1)
-            .to(device)
+            .to(self.device)
         )
         targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
         loss = (-targets * inputs).mean(0).sum()
@@ -41,29 +41,29 @@ class CenterLoss(nn.Module):
         feat_dim (int): feature dimension.
     """
 
-    def __init__(self, num_classes=751, feat_dim=2048, device="cpu"):
+    def __init__(self, num_classes=72, feat_dim=2048, device="cpu"):
         super(CenterLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
         self.device = device
 
         self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim)).to(
-            device
+            self.device
         )
 
-    def forward(self, x, labels):
+    def forward(self, inputs, labels):
         """
         Args:
-            x: feature matrix with shape (batch_size, feat_dim).
+            inputs: feature matrix with shape (batch_size, feat_dim).
             labels: ground truth labels with shape (num_classes).
         """
-        assert x.size(0) == labels.size(
-            0
-        ), "features.size(0) is not equal to labels.size(0)"
+        assert (
+            inputs.shape[0] == labels.shape[0]
+        ), "Batch size of features and labels are not equal."
 
-        batch_size = x.size(0)
+        batch_size = inputs.size(0)
         distmat = (
-            torch.pow(x, 2)
+            torch.pow(inputs, 2)
             .sum(dim=1, keepdim=True)
             .expand(batch_size, self.num_classes)
             + torch.pow(self.centers, 2)
@@ -71,7 +71,7 @@ class CenterLoss(nn.Module):
             .expand(self.num_classes, batch_size)
             .t()
         )
-        distmat.addmm_(1, -2, x, self.centers.t())
+        distmat.addmm_(1, -2, inputs, self.centers.t())
 
         classes = torch.arange(self.num_classes).long().to(self.device)
         labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
@@ -84,6 +84,7 @@ class CenterLoss(nn.Module):
             dist.append(value)
         dist = torch.cat(dist)
         loss = dist.mean()
+
         return loss
 
 
@@ -99,14 +100,15 @@ class TripletLoss(object):
         else:
             self.ranking_loss = nn.SoftMarginLoss()
 
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, inputs, labels, normalize_feature=False):
         if normalize_feature:
-            global_feat = normalize(global_feat, axis=-1)
-        dist_mat = euclidean_dist(global_feat, global_feat)
+            inputs = normalize(inputs, axis=-1)
+        dist_mat = euclidean_dist(inputs, inputs)
         dist_ap, dist_an = hard_example_mining(dist_mat, labels)
         y = dist_an.new().resize_as_(dist_an).fill_(1)
         if self.margin is not None:
             loss = self.ranking_loss(dist_an, dist_ap, y)
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
-        return loss, dist_ap, dist_an
+
+        return loss
