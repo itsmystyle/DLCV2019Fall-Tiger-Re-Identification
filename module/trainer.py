@@ -308,6 +308,11 @@ if __name__ == "__main__":
     if args.triplet:
         criterion += [TripletLoss(0.3)]
 
+    if args.center:
+        criterion += [
+            CenterLoss(num_classes=train_dataset.get_num_classes(), device=device)
+        ]
+
     # metric
     metric = MulticlassAccuracy()
     val_metric = Accuracy()
