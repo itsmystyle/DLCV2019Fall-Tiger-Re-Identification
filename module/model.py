@@ -27,9 +27,9 @@ class ResNet152(nn.Module):
 
     def forward(self, x):
         x = self.backbone(x)
-        x = self.classifier(x)
+        logits = self.classifier(x)
 
-        return x
+        return logits, x
 
     def extract_features(self, x):
         x = self.backbone(x)
@@ -65,9 +65,9 @@ class SeResNet50(nn.Module):
 
     def forward(self, x):
         x = self.extract_features(x)
-        x = self.classifier(x)
+        logits = self.classifier(x)
 
-        return x
+        return logits, x
 
     def extract_features(self, x):
         x = self.backbone(x)
@@ -104,9 +104,9 @@ class SeResNet152(nn.Module):
 
     def forward(self, x):
         x = self.extract_features(x)
-        x = self.classifier(x)
+        logits = self.classifier(x)
 
-        return x
+        return logits, x
 
     def extract_features(self, x):
         x = self.backbone.features(x)
@@ -143,9 +143,9 @@ class SeResNeXt50(nn.Module):
 
     def forward(self, x):
         x = self.extract_features(x)
-        x = self.classifier(x)
+        logits = self.classifier(x)
 
-        return x
+        return logits, x
 
     def extract_features(self, x):
         x = self.backbone.features(x)
@@ -182,9 +182,9 @@ class NASNet(nn.Module):
 
     def forward(self, x):
         x = self.extract_features(x)
-        x = self.classifier(x)
+        logits = self.classifier(x)
 
-        return x
+        return logits, x
 
     def extract_features(self, x):
         x = self.backbone.features(x)
@@ -234,7 +234,7 @@ class ResNetArcFaceModel(nn.Module):
         x = self.extract_features(x)
         logits = self.final(x, label)
 
-        return self.logsoftmax(logits)
+        return self.logsoftmax(logits), x
 
     def extract_features(self, x):
         batch_size = x.shape[0]
@@ -289,7 +289,7 @@ class SeResNetArcFaceModel(nn.Module):
         x = self.extract_features(x)
         logits = self.final(x, label)
 
-        return self.logsoftmax(logits)
+        return self.logsoftmax(logits), x
 
     def extract_features(self, x):
         batch_size = x.shape[0]
@@ -345,7 +345,7 @@ class SeResNeXtArcFaceModel(nn.Module):
         x = self.extract_features(x)
         logits = self.final(x, label)
 
-        return self.logsoftmax(logits)
+        return self.logsoftmax(logits), x
 
     def extract_features(self, x):
         batch_size = x.shape[0]
