@@ -97,12 +97,23 @@ class Trainer:
                 "SeResNetArcFaceModel",
                 "SeResNeXtArcFaceModel",
             ]:
-                preds = self.model(images, labels)
+                preds, features = self.model(images, labels)
             else:
-                preds = self.model(images)
+                preds, features = self.model(images)
 
             # calculate loss and update weights
-            loss = self.criterion(preds, labels) / self.accumulate_gradient
+            loss = 0.0
+            for criterion in self.criterion:
+                name = criterion[0]
+                scale = criterion[2]
+                criterion = criterion[1]
+
+                if name in ["TripletLoss", "CenterLoss"]:
+                    loss += scale * criterion(features, labels)
+                else:
+                    loss += scale * criterion(preds, labels)
+
+            loss /= self.accumulate_gradient
             if idx % self.accumulate_gradient == 0:
                 self.optimizer.zero_grad()
             loss.backward()
@@ -218,6 +229,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--center", action="store_true", help="Whether to use center loss."
     )
+    parser.add_argument(
+        "--feature_dim", type=int, default=512, help="Final features dimension."
+    )
     parser.add_argument("--random_seed", type=int, default=42, help="Random seed.")
 
     args = parser.parse_args()
@@ -247,17 +261,17 @@ if __name__ == "__main__":
     if args.model == "resnet152":
         model = ResNet152(train_dataset.get_num_classes())
     elif args.model == "seresnet50":
-        model = SeResNet50(train_dataset.get_num_classes(), 512)
+        model = SeResNet50(train_dataset.get_num_classes(), args.feature_dim)
     elif args.model == "seresnet152":
-        model = SeResNet152(train_dataset.get_num_classes(), 512)
+        model = SeResNet152(train_dataset.get_num_classes(), args.feature_dim)
     elif args.model == "seresnext50":
-        model = SeResNeXt50(train_dataset.get_num_classes(), 512)
+        model = SeResNeXt50(train_dataset.get_num_classes(), args.feature_dim)
     elif args.model == "resnet_arcface":
         model = ResNetArcFaceModel(
             train_dataset.get_num_classes(),
             args.scale,
             args.margin,
-            512,
+            args.feature_dim,
             True,
             device=device,
         )
@@ -266,7 +280,7 @@ if __name__ == "__main__":
             train_dataset.get_num_classes(),
             args.scale,
             args.margin,
-            512,
+            args.feature_dim,
             True,
             device=device,
         )
@@ -275,7 +289,7 @@ if __name__ == "__main__":
             train_dataset.get_num_classes(),
             args.scale,
             args.margin,
-            512,
+            args.feature_dim,
             50,
             True,
             device=device,
@@ -285,13 +299,13 @@ if __name__ == "__main__":
             train_dataset.get_num_classes(),
             args.scale,
             args.margin,
-            512,
+            args.feature_dim,
             101,
             True,
             device=device,
         )
     elif args.model == "nasnet":
-        model = NASNet(train_dataset.get_num_classes(), 512)
+        model = NASNet(train_dataset.get_num_classes(), args.feature_dim)
 
     # prepare optimizer
     optimizer = optim.Adam(
@@ -301,16 +315,30 @@ if __name__ == "__main__":
     # criterion
     criterion = []
     if args.smoothing:
-        criterion += [CrossEntropyLabelSmooth(train_dataset.get_num_classes())]
+        criterion += [
+            (
+                "CELoss",
+                CrossEntropyLabelSmooth(train_dataset.get_num_classes(), device=device),
+                1.0,
+            )
+        ]
     else:
-        criterion += [nn.NLLLoss()]
+        criterion += [("CELoss", nn.NLLLoss(), 1.0)]
 
     if args.triplet:
-        criterion += [TripletLoss(0.3)]
+        criterion += [("TripletLoss", TripletLoss(0.3), 2.0)]
 
     if args.center:
         criterion += [
-            CenterLoss(num_classes=train_dataset.get_num_classes(), device=device)
+            (
+                "CenterLoss",
+                CenterLoss(
+                    num_classes=train_dataset.get_num_classes(),
+                    feat_dim=args.feature_dim,
+                    device=device,
+                ),
+                1.0,
+            )
         ]
 
     # metric
