@@ -18,9 +18,10 @@ from model import (
     ResNetArcFaceModel,
     SeResNetArcFaceModel,
     SeResNeXtArcFaceModel,
+    NASNet,
 )
 from metrics import MulticlassAccuracy, Accuracy
-from loss import CrossEntropyLabelSmooth
+from loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
 from utils import set_random_seed
 
 
@@ -197,6 +198,8 @@ if __name__ == "__main__":
         "--weight_decay", type=float, default=1e-6, help="Weight decay rate."
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size.")
+    parser.add_argument("--scale", type=int, default=30, help="Scale for arcface.")
+    parser.add_argument("--margin", type=float, default=0.5, help="Margin for arcface.")
     parser.add_argument(
         "--n_workers", type=int, default=8, help="Number of worker for dataloader."
     )
@@ -208,6 +211,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--smoothing", action="store_true", help="Whether to smooth label."
+    )
+    parser.add_argument(
+        "--triplet", action="store_true", help="Whether to use triplet loss."
+    )
+    parser.add_argument(
+        "--center", action="store_true", help="Whether to use center loss."
     )
     parser.add_argument("--random_seed", type=int, default=42, help="Random seed.")
 
@@ -245,20 +254,44 @@ if __name__ == "__main__":
         model = SeResNeXt50(train_dataset.get_num_classes(), 512)
     elif args.model == "resnet_arcface":
         model = ResNetArcFaceModel(
-            train_dataset.get_num_classes(), 30, 0.5, 512, True, device=device,
+            train_dataset.get_num_classes(),
+            args.scale,
+            args.margin,
+            512,
+            True,
+            device=device,
         )
     elif args.model == "seresnet_arcface":
         model = SeResNetArcFaceModel(
-            train_dataset.get_num_classes(), 30, 0.5, 512, True, device=device,
+            train_dataset.get_num_classes(),
+            args.scale,
+            args.margin,
+            512,
+            True,
+            device=device,
         )
     elif args.model == "seresnext50_arcface":
         model = SeResNeXtArcFaceModel(
-            train_dataset.get_num_classes(), 30, 0.5, 512, 50, True, device=device,
+            train_dataset.get_num_classes(),
+            args.scale,
+            args.margin,
+            512,
+            50,
+            True,
+            device=device,
         )
     elif args.model == "seresnext101_arcface":
         model = SeResNeXtArcFaceModel(
-            train_dataset.get_num_classes(), 30, 0.5, 512, 101, True, device=device,
+            train_dataset.get_num_classes(),
+            args.scale,
+            args.margin,
+            512,
+            101,
+            True,
+            device=device,
         )
+    elif args.model == "nasnet":
+        model = NASNet(train_dataset.get_num_classes(), 512)
 
     # prepare optimizer
     optimizer = optim.Adam(
@@ -266,10 +299,14 @@ if __name__ == "__main__":
     )
 
     # criterion
+    criterion = []
     if args.smoothing:
-        criterion = CrossEntropyLabelSmooth(train_dataset.get_num_classes())
+        criterion += [CrossEntropyLabelSmooth(train_dataset.get_num_classes())]
     else:
-        criterion = nn.NLLLoss()
+        criterion += [nn.NLLLoss()]
+
+    if args.triplet:
+        criterion += [TripletLoss(0.3)]
 
     # metric
     metric = MulticlassAccuracy()
