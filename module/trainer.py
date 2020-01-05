@@ -230,7 +230,7 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train tider re-id net.")
+    parser = argparse.ArgumentParser(description="Train tiger re-id net.")
     parser.add_argument("image_dir", type=str, help="Path to image directory.")
     parser.add_argument("label_path", type=str, help="Path to label files.")
     parser.add_argument("query_path", type=str, help="Path to query files.")
@@ -279,6 +279,11 @@ if __name__ == "__main__":
         "--re_ranking",
         action="store_true",
         help="Whether to use re-ranking to calculate rank 1.",
+    )
+    parser.add_argument("--k1", type=int, default=20, help="K1 value for re-ranking.")
+    parser.add_argument("--k2", type=int, default=6, help="K2 value for re-ranking.")
+    parser.add_argument(
+        "--lambda_value", type=float, default=0.3, help="Lambda value for re-ranking."
     )
     parser.add_argument("--random_seed", type=int, default=42, help="Random seed.")
 
@@ -400,7 +405,11 @@ if __name__ == "__main__":
     metric = MulticlassAccuracy()
     if args.re_ranking:
         val_metric = ReRankingAccuracy(
-            num_query=len(val_dataset), max_rank=gallery_images[1].shape[0]
+            num_query=len(val_dataset),
+            max_rank=gallery_images[1].shape[0],
+            k1=args.k1,
+            k2=args.k2,
+            lambda_value=args.lambda_value,
         )
     else:
         val_metric = Accuracy()
