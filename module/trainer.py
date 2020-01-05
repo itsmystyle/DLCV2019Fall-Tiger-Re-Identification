@@ -20,9 +20,23 @@ from model import (
     SeResNeXtArcFaceModel,
     NASNet,
 )
-from metrics import MulticlassAccuracy, Accuracy
+from metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
 from loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
+from lr_scheduler import WarmupMultiStepLR
 from utils import set_random_seed
+
+
+# decay rate of learning rate
+GAMMA = 0.1
+# decay step of learning rate
+STEPS = (10, 35)
+
+# warm up factor
+WARMUP_FACTOR = 1.0 / 3
+# iterations of warm up
+WARMUP_ITERS = 20
+# method of warm up, option: 'constant','linear'
+WARMUP_METHOD = "linear"
 
 
 class Trainer:
@@ -34,6 +48,7 @@ class Trainer:
         train_loader,
         val_loader,
         gallery,
+        scheduler,
         writer,
         metric,
         val_metric,
@@ -58,6 +73,9 @@ class Trainer:
         # parameters
         self.accumulate_gradient = accumulate_gradient
 
+        # scheduler
+        self.scheduler = scheduler
+
         # utils
         self.device = device
         self.writer = writer
@@ -73,6 +91,9 @@ class Trainer:
         for epoch in range(1, epochs + 1):
             loss, iters = self._run_one_epoch(epoch, iters)
             best_accuracy = self._eval_one_epoch(best_accuracy)
+
+            if self.scheduler:
+                self.scheduler.step()
 
     def _run_one_epoch(self, epoch, iters):
         self.model.train()
@@ -158,6 +179,9 @@ class Trainer:
 
             gallery_label = self.gallery[1].cpu().numpy()
 
+            if self.val_metric.name == "Re-Rank 1":
+                self.val_metric.update(gallery, gallery_label)
+
             for idx, batch in trange:
 
                 images = batch[0].to(self.device)
@@ -166,21 +190,31 @@ class Trainer:
                 feature = self.model.extract_features(images)
                 feature = feature.cpu().numpy()
 
-                distance = cosine_distances(feature, gallery)
-                min_idx = distance.reshape(-1).argmin()
-                preds = gallery_label[min_idx]
+                if self.val_metric.name == "Re-Rank 1":
+                    self.val_metric.update(feature, labels)
 
-                self.val_metric.update(preds, labels)
+                    # update tqdm
+                    trange.set_postfix(**{self.val_metric.name: "TBD"})
+                else:
+                    distance = cosine_distances(feature, gallery)
+                    min_idx = distance.reshape(-1).argmin()
+                    preds = gallery_label[min_idx]
 
-                # update tqdm
-                trange.set_postfix(
-                    **{self.val_metric.name: self.val_metric.print_score()}
-                )
+                    self.val_metric.update(preds, labels)
+
+                    # update tqdm
+                    trange.set_postfix(
+                        **{self.val_metric.name: self.val_metric.print_score()}
+                    )
+
+            _val_score = self.val_metric.get_score()
+
+            print("Validation Rank-1 score: {:.5f}".format(_val_score))
 
             # save best acc model
-            if self.val_metric.get_score() > best_accuracy:
+            if _val_score > best_accuracy:
                 print("Best model saved!")
-                best_accuracy = self.val_metric.get_score()
+                best_accuracy = _val_score
                 self.save(
                     os.path.join(
                         self.save_dir, "model_best_{:.5f}.pth.tar".format(best_accuracy)
@@ -230,7 +264,21 @@ if __name__ == "__main__":
         "--center", action="store_true", help="Whether to use center loss."
     )
     parser.add_argument(
+        "--dist",
+        type=str,
+        default="euclidean",
+        help="Which distrance function to user, euclidean or cos.",
+    )
+    parser.add_argument(
         "--feature_dim", type=int, default=512, help="Final features dimension."
+    )
+    parser.add_argument(
+        "--lr_scheduler", action="store_true", help="Whether to use scheduler."
+    )
+    parser.add_argument(
+        "--re_ranking",
+        action="store_true",
+        help="Whether to use re-ranking to calculate rank 1.",
     )
     parser.add_argument("--random_seed", type=int, default=42, help="Random seed.")
 
@@ -326,7 +374,7 @@ if __name__ == "__main__":
         criterion += [("CELoss", nn.NLLLoss(), 1.0)]
 
     if args.triplet:
-        criterion += [("TripletLoss", TripletLoss(0.3), 2.0)]
+        criterion += [("TripletLoss", TripletLoss(0.3, args.dist), 4.0)]
 
     if args.center:
         criterion += [
@@ -341,9 +389,21 @@ if __name__ == "__main__":
             )
         ]
 
+    # scheduler
+    scheduler = None
+    if args.lr_scheduler:
+        scheduler = WarmupMultiStepLR(
+            optimizer, STEPS, GAMMA, WARMUP_FACTOR, WARMUP_ITERS, WARMUP_METHOD,
+        )
+
     # metric
     metric = MulticlassAccuracy()
-    val_metric = Accuracy()
+    if args.re_ranking:
+        val_metric = ReRankingAccuracy(
+            num_query=len(val_dataset), max_rank=gallery_images[1].shape[0]
+        )
+    else:
+        val_metric = Accuracy()
 
     trainer = Trainer(
         model,
@@ -352,6 +412,7 @@ if __name__ == "__main__":
         train_dataloader,
         val_dataloader,
         gallery_images,
+        scheduler,
         writer,
         metric,
         val_metric,
