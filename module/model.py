@@ -8,25 +8,34 @@ from pretrainedmodels.models import (
     nasnetalarge,
 )
 
-from module.layers.utils import Flatten
 from module.layers.metric_learning_utils import GeM, ArcMarginProduct
 
 
 class ResNet152(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, fc_dim=512):
         super(ResNet152, self).__init__()
 
         self.num_classes = num_classes
+        self.fc_dim = fc_dim
 
         backbone = models.resnet152(pretrained=True)
         self.backbone = nn.Sequential(*(list(backbone.children())[:-1]))
+        self.fc = nn.Linear(2048 * 10 * 10, self.fc_dim)
+        self.bn = nn.BatchNorm1d(self.fc_dim)
+        self._init_params()
 
         self.classifier = nn.Sequential(
-            Flatten(), nn.Linear(2048 * 10 * 10, self.num_classes), nn.LogSoftmax(dim=1)
+            nn.Linear(self.fc_dim, self.num_classes), nn.LogSoftmax(dim=1)
         )
 
+    def _init_params(self):
+        nn.init.xavier_normal_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0)
+        nn.init.constant_(self.bn.weight, 1)
+        nn.init.constant_(self.bn.bias, 0)
+
     def forward(self, x):
-        x = self.backbone(x)
+        x = self.extract_features(x)
         logits = self.classifier(x)
 
         return logits, x
@@ -34,6 +43,8 @@ class ResNet152(nn.Module):
     def extract_features(self, x):
         x = self.backbone(x)
         x = x.view(x.shape[0], -1)
+        x = self.fc(x)
+        x = self.bn(x)
 
         return x
 
