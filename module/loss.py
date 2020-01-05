@@ -93,12 +93,18 @@ class TripletLoss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, margin=None):
+    def __init__(self, margin=None, dist="euclidean"):
         self.margin = margin
         if margin is not None:
-            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+            if dist == "euclidean":
+                self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+            elif dist == "cos":
+                self.ranking_loss = nn.CosineEmbeddingLoss(margin=margin)
         else:
-            self.ranking_loss = nn.SoftMarginLoss()
+            if dist == "euclidean":
+                self.ranking_loss = self.ranking_loss = nn.SoftMarginLoss()
+            elif dist == "cos":
+                self.ranking_loss = nn.CosineEmbeddingLoss(margin=0)
 
     def __call__(self, inputs, labels, normalize_feature=False):
         if normalize_feature:
@@ -107,7 +113,7 @@ class TripletLoss(object):
         dist_ap, dist_an = hard_example_mining(dist_mat, labels)
         y = dist_an.new().resize_as_(dist_an).fill_(1)
         if self.margin is not None:
-            loss = self.ranking_loss(dist_an, dist_ap, y)
+            loss = self.ranking_loss(dist_an.unsqueeze(0), dist_ap.unsqueeze(0), y)
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
 
