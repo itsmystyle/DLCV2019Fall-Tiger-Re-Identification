@@ -13,8 +13,8 @@ import random
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
-SIZE = [384, 384]
-DEGREE = 10
+SIZE = [256, 512]
+DEGREE = 5
 BRIGHT_PROB = 0.2
 SATURA_PROB = 0.2
 CONTRAST_PROB = 0.2
@@ -47,20 +47,19 @@ class ImageDataset(Dataset):
 
         self.transform = T.Compose(
             [
-                # T.Resize(SIZE),
-                # T.RandomRotation(DEGREE),
-                # T.RandomHorizontalFlip(p=0.5),
+                T.Resize(SIZE),
+                T.RandomRotation(DEGREE),
                 T.ColorJitter(
                     brightness=BRIGHT_PROB,
                     saturation=SATURA_PROB,
                     contrast=CONTRAST_PROB,
                     hue=HUE_PROB,
                 ),
-                # T.Pad(PADDING),
-                # T.RandomCrop(SIZE),
+		T.Pad(PADDING),
+                T.RandomCrop(SIZE),
                 T.ToTensor(),
-                T.Normalize(MEAN, STD),
                 # RandomErasing(probability=0.5, mean=MEAN),
+                T.Normalize(MEAN, STD),
             ]
         )
 
@@ -111,6 +110,7 @@ class QueryDataset(Dataset):
 
         self.transform = T.Compose(
             [
+		T.Resize(SIZE),
                 T.ToTensor(),
                 T.Normalize(MEAN, STD),
             ]
@@ -150,7 +150,7 @@ import random
 
 class RandomErasing(object):
 
-    def __init__(self, probability=0.5, sl=0.02, sh=0.4, r1=0.3, mean=(0.4914, 0.4822, 0.4465)):
+    def __init__(self, probability=0.5, sl=0.01, sh=0.2, r1=0.3, mean=(0.4914, 0.4822, 0.4465)):
         self.probability = probability
         self.mean = mean
         self.sl = sl
@@ -161,9 +161,14 @@ class RandomErasing(object):
 
         if random.uniform(0, 1) >= self.probability:
             return img
+        
+        '''
+        new_img = Image.new(img.mode, img.size)
+        new_img_pixel = []
+        '''
 
         for attempt in range(100):
-            area = img.size()[0] * img.size()[1]
+            area = img.size()[1] * img.size()[2]
 
             target_area = random.uniform(self.sl, self.sh) * area
             aspect_ratio = random.uniform(self.r1, 1 / self.r1)
@@ -171,33 +176,40 @@ class RandomErasing(object):
             h = int(round(math.sqrt(target_area * aspect_ratio)))
             w = int(round(math.sqrt(target_area / aspect_ratio)))
 
-            if w < img.size()[1] and h < img.size()[0]:
+            if w < img.size()[2] and h < img.size()[1]:
                 x1 = random.randint(0, img.size()[1] - h)
                 y1 = random.randint(0, img.size()[2] - w)
-                if img.size()[0] == 3:
-                    img[0, x1:x1 + h, y1:y1 + w] = self.mean[0]
-                    img[1, x1:x1 + h, y1:y1 + w] = self.mean[1]
-                    img[2, x1:x1 + h, y1:y1 + w] = self.mean[2]
-                else:
-                    img[0, x1:x1 + h, y1:y1 + w] = self.mean[0]
+                
+                '''
+                new_img_pixel = img.load()
+                new_img_pixel[x1:x1 + h, y1:y1 + w] = self.mean
+                new_img.putdata(new_img_pixel)
+                '''
+                
+                #if img.size[0] == 3:
+                img[0, x1:x1 + h, y1:y1 + w] = self.mean[0]
+                img[1, x1:x1 + h, y1:y1 + w] = self.mean[1]
+                img[2, x1:x1 + h, y1:y1 + w] = self.mean[2]
+                #else:
+                #    img[0, x1:x1 + h, y1:y1 + w] = self.mean[0]
                 return img
 
         return img
 
 
-
+'''
 if __name__ == "__main__":
 
-    image_dir = "../dataset/resize_img"
-    label_path = "../dataset/train.csv"
+    image_dir = "../dataset/aug_img/"
+    label_path = "../dataset/train_aug.csv"
 
     batch_size = 1
 
-    dataset = ImageDataset(image_dir, label_path, train=True)
+    dataset = ImageDataset(image_dir, label_path)
     dataloader = DataLoader(
-        dataset, shuffle=False, batch_size=batch_size, num_workers=2
+        dataset, shuffle=True, batch_size=batch_size, num_workers=7
     )
-
+    
     data = next(iter(dataloader))
     plt.figure(figsize=(8, 8))
     plt.axis("off")
@@ -208,4 +220,6 @@ if __name__ == "__main__":
             (1, 2, 0),
         ),
     )
-    plt.show()
+    #plt.show()
+    #plt.savefig("./test.jpg")
+    '''

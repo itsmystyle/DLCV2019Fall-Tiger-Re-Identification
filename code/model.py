@@ -6,12 +6,7 @@ import cv2
 import math
 
 import torch.hub
-# torch.hub.load(
-	    # 'moskomule/senet.pytorch',
-	    # 'se_resnet50',
-	    # pretrained=True,)
-
-# https://arxiv.org/pdf/1903.07071.pdf
+import pretrainedmodels
 
 
 class Model(nn.Module):
@@ -23,7 +18,9 @@ class Model(nn.Module):
 		self.class_num = class_num
 
 		self.backbone = torch.hub.load('moskomule/senet.pytorch', 'se_resnet50', pretrained=True)
+		
 		# Modify the last conv stride to 1
+		#self.backbone = pretrainedmodels.se_resnext101_32x4d(num_classes=1000, pretrained='imagenet')
 		self.backbone.layer4[0].downsample[0].stride = (1, 1)
 		self.backbone.layer4[0].conv2.stride = (1, 1)
 
@@ -32,22 +29,24 @@ class Model(nn.Module):
 			self.backbone.bn1,
 			self.backbone.relu,
 			self.backbone.maxpool,
-
+			
+			#self.backbone.layer0,
 			self.backbone.layer1,
 			self.backbone.layer2,
 			self.backbone.layer3,
-			self.backbone.layer4
+			self.backbone.layer4,
+			#self.backbone.avgpool,
 		)
 
 		self.spatial_pyramid_pooling = SpatialPyramidPool([1], mode='avg')
-		# self.spatial_pyramid_pooling = nn.AdaptiveAvgPool2d(1)
+		#self.spatial_pyramid_pooling = nn.AdaptiveAvgPool2d(1)
 
 		self.BN_layer = nn.BatchNorm1d(2048)
 		# self.BN_layer.bias.requires_grad_(False)
 		self.NormalOut = nn.Linear(2048, class_num, bias=False)
 
 		# initialization:
-		self.BN_layer.apply(weights_init_xavier)
+		self.BN_layer.apply(weights_init_kaiming)
 		self.NormalOut.apply(weights_init_classifier)
 
 	def forward(self, img):
@@ -62,6 +61,7 @@ class Model(nn.Module):
 
 		img_feat = self.getFeat(img)
 		pool_img_feat = self.spatial_pyramid_pooling(img_feat).flatten(start_dim=1)
+		#pool_img_feat = img_feat.flatten(start_dim=1)
 
 		return pool_img_feat
 
@@ -100,7 +100,7 @@ def weights_init_xavier(m):
 def weights_init_classifier(m):
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
-        nn.init.xavier_normal_(m.weight)
+        nn.init.kaiming_normal_(m.weight)
         if m.bias:
             nn.init.constant_(m.bias, 0.0)
 

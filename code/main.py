@@ -5,43 +5,44 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
 from data import ImageDataset, QueryDataset
-from train import *
+from training import train, evaluate
 from model import Model
+import os
 
-
-
+'''
 def collate_fn(batch):
 	image, self_label, pos_image, neg_image = zip(*batch)
 	
 	return image, self_label, pos_image, neg_image
+'''
 
-
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 if __name__ == '__main__':
-
-	image_dir = "../dataset/resize_img"
-	label_path = "../dataset/train.csv"
+	
+	train_dir = "../dataset/aug_img/"
+	valid_dir = "../dataset/imgs/"
+	label_path = "../dataset/train_aug.csv"
 	query_path = "../dataset/query.csv"
 	gallery_path = "../dataset/gallery.csv"
 
-	train_dataset = ImageDataset(image_dir, label_path)
+	train_dataset = ImageDataset(train_dir, label_path)
 	train_dataloader = DataLoader(
-	    train_dataset, shuffle=True, batch_size=2, num_workers=3, collate_fn=collate_fn
+	    train_dataset, shuffle=True, batch_size=16, num_workers=7, #collate_fn=collate_fn
 	)
 
-	valid_dataset = QueryDataset(image_dir, query_path, gallery_path)
-	valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=1, num_workers=3)
+	valid_dataset = QueryDataset(valid_dir, query_path, gallery_path)
+	valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=1, num_workers=7)
 
-	model = Model(72)
+	model = Model(len(train_dataset.id2idx))
 
-	epochs = 300
+	epochs = 100
 
-	optimizer = torch.optim.Adam(model.parameters(), lr=5e-4, weight_decay=1e-6)
+	optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=2, verbose=True)
 
-	update_size = 32
+	update_size = 2
 
 	model = model.cuda()
 

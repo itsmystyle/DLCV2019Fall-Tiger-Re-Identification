@@ -4,7 +4,11 @@ import torch.nn.functional as F
 
 from tqdm import tqdm as tqdm
 
-from utils import LabelSmoothingCrossEntropy
+#from utils import LabelSmoothingCrossEntropy
+from utils import *
+
+
+
 
 def train(model, optim, dataloader, update_size=32):
 
@@ -23,7 +27,7 @@ def train(model, optim, dataloader, update_size=32):
 
 	for idx, data in enumerate(trange):
 
-		if (idx+1) % update_size == 0:
+		if (idx+1) % update_size == 0 and idx != 0:
 			optim.step()
 			optim.zero_grad()
 			trange.set_postfix(Accuracy=(batch_correct / batch_count), Batch_Loss=(batch_loss / batch_count))
@@ -33,32 +37,43 @@ def train(model, optim, dataloader, update_size=32):
 
 
 		image, image_label, pos_image, neg_image = data
+		
+		image = image.cuda()
+		pos_image = pos_image.cuda()
+		neg_image = neg_image.cuda()
+		image_label = image_label.cuda().long()
 
-		image_out = []
-		pos_image_out = []
-		neg_image_out = []
+		#image_out = []
+		#pos_image_out = []
+		#neg_image_out = []
 
 		batch_size = len(image)
 
-		for i in range(batch_size):
-			image_out.append( model.getFeature(image[i].cuda().unsqueeze(0)))
-			pos_image_out.append( model.getFeature(pos_image[i].cuda().unsqueeze(0)))
-			neg_image_out.append( model.getFeature(neg_image[i].cuda().unsqueeze(0)))
+		#for i in range(batch_size):
+		#	image_out.append( model.getFeature(image[i].cuda().unsqueeze(0)))
+		#	pos_image_out.append( model.getFeature(pos_image[i].cuda().unsqueeze(0)))
+		#	neg_image_out.append( model.getFeature(neg_image[i].cuda().unsqueeze(0)))
 
-		image_out = torch.stack(image_out).squeeze(1)
-		pos_image_out = torch.stack(pos_image_out).squeeze(1)
-		neg_image_out = torch.stack(neg_image_out).squeeze(1)
-
-		image_cls = model.NormalOut(model.BN_layer(image_out))
-		image_label = torch.Tensor(image_label).cuda().long()
+		#image_out = torch.stack(image_out).squeeze(1)
+		#pos_image_out = torch.stack(pos_image_out).squeeze(1)
+		#neg_image_out = torch.stack(neg_image_out).squeeze(1)
+		
+		image_out = model.getFeature(image)
+		pos_image_out = model.getFeature(pos_image)
+		neg_image_out = model.getFeature(neg_image)
+		
+		bn_out = model.BN_layer(image_out)
+		image_cls = model.NormalOut(F.dropout(bn_out, p=0.0))
+		#image_label = torch.Tensor(image_label).cuda().long()
 
 		# image_out = model(image)
 		# pos_image_out = model(pos_image)[-1].detach()
 		# neg_image_out = model(neg_image)[-1].detach()
+		
 
-		triplet_loss = nn.TripletMarginLoss(margin=0.3, p=2)(image_out, pos_image_out, neg_image_out)
-		# pos_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out[1], pos_image_out, torch.tensor(1.0).cuda())
-		# neg_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out[1], neg_image_out, torch.tensor(-1.0).cuda())
+		triplet_loss = 2.0 * TripletLoss(margin=0.3)(image_out, image_label)[0]
+		#pos_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out, model.BN_layer(pos_image_out), torch.tensor(1.0).cuda())
+		#neg_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out, model.BN_layer(neg_image_out), torch.tensor(-1.0).cuda())
 		cross_entropy = LabelSmoothingCrossEntropy(0.1)(image_cls, image_label)
 		# cross_entropy_erase = LabelSmoothingCrossEntropy(0.1)(image_out[1], image_label)
 		# cross_entropy_fuse = LabelSmoothingCrossEntropy(0.1)(image_out[2], image_label)
@@ -78,7 +93,9 @@ def train(model, optim, dataloader, update_size=32):
 		batch_correct += correct.item()
 		total_ac += correct.item()
 		batch_count += batch_size
-
+	
+	optim.step()
+	optim.zero_grad()
 
 	total_ac /= len(dataloader.dataset)
 	total_loss /= len(dataloader)
