@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
-from module.dataset import ImageDataset
+from module.dataset import ImageDataset, PairwiseImageDataset
 from module.model import (
     ResNet152,
     SeResNet50,
@@ -17,6 +17,7 @@ from module.model import (
     SeResNetArcFaceModel,
     SeResNeXtArcFaceModel,
     NASNet,
+    FRNet,
 )
 from module.metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
 from module.loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
@@ -105,7 +106,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # prepare dataset
-    train_dataset = ImageDataset(args.image_dir, args.label_path)
+    if args.model == "ours":
+        train_dataset = PairwiseImageDataset(args.image_dir, args.label_path)
+    else:
+        train_dataset = ImageDataset(args.image_dir, args.label_path)
     train_dataloader = DataLoader(
         train_dataset,
         shuffle=True,
@@ -170,6 +174,18 @@ if __name__ == "__main__":
         )
     elif args.model == "nasnet":
         model = NASNet(train_dataset.get_num_classes(), args.feature_dim)
+    elif args.model == "ours":
+        model = FRNet(
+            train_dataset.get_num_classes(),
+            args.scale,
+            args.margin,
+            args.feature_dim,
+            64,
+            4,
+            50,
+            True,
+            device=device,
+        )
 
     # prepare optimizer
     optimizer = optim.Adam(

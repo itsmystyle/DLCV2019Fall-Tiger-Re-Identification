@@ -9,6 +9,7 @@ from pretrainedmodels.models import (
 )
 
 from module.layers.metric_learning_utils import GeM, ArcMarginProduct
+from module.layers.utils import weights_init_kaiming
 
 
 class ResNet152(nn.Module):
@@ -368,3 +369,112 @@ class SeResNeXtArcFaceModel(nn.Module):
             x = self.bn(x)
 
         return x
+
+
+class FRNet(nn.Module):
+    def __init__(
+        self,
+        n_classes,
+        scale,
+        margin,
+        fc_dim,
+        cls_dim,
+        init_img_size,
+        model=50,
+        use_fc=False,
+        device=None,
+    ):
+        super(FRNet, self).__init__()
+
+        # Encoder
+        if model == 50:
+            self.backbone = se_resnext50_32x4d(num_classes=1000, pretrained="imagenet")
+        else:
+            self.backbone = se_resnext101_32x4d(num_classes=1000, pretrained="imagenet")
+        final_in_features = self.backbone.last_linear.in_features
+        self.pooling = GeM()
+        self.use_fc = use_fc
+        self.fc_dim = fc_dim
+        if use_fc:
+            self.fc = nn.Sequential(
+                nn.Linear(final_in_features, fc_dim), nn.BatchNorm1d(fc_dim)
+            )
+            self.fc.apply(weights_init_kaiming)
+
+        # Decoder
+        self.init_img_size = init_img_size
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(
+                fc_dim // init_img_size ** 2, 64 * 8, 4, 2, 1, bias=False
+            ),
+            nn.BatchNorm2d(64 * 8),
+            nn.ReLU(True),  # [batch, 512, 8, 8]
+            nn.ConvTranspose2d(64 * 8, 64 * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64 * 4),
+            nn.ReLU(True),  # [batch, 256, 16, 16]
+            nn.ConvTranspose2d(64 * 4, 64 * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64 * 2),
+            nn.ReLU(True),  # [batch, 128, 32, 32]
+            nn.ConvTranspose2d(64 * 2, 64, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),  # [batch, 64, 64, 64]
+            nn.ConvTranspose2d(64, 64, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),  # [batch, 64, 128, 128]
+            nn.ConvTranspose2d(64, 32, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(True),  # [batch, 32, 256, 256]
+            nn.ConvTranspose2d(32, 16, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),  # [batch, 16, 512, 512]
+            nn.Conv2d(16, 3, 3, 1, 1, bias=False),
+        )
+        self.decoder.apply(weights_init_kaiming)
+
+        # Classifier
+        self.cls_dim = cls_dim
+        self.final = ArcMarginProduct(
+            self.cls_dim, n_classes, multi_task=False, s=scale, m=margin, device=device,
+        )
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, x, ref_x, label):
+        x = self._encoder(x)
+        # _, f_x = x[:, : -self.cls_dim], x[:, -self.cls_dim :]
+        f_x = x[:, -self.cls_dim:]
+
+        ref_x = self._encoder(ref_x)
+        # b_ref_x, _ = ref_x[:, : -self.cls_dim], ref_x[:, -self.cls_dim :]
+        ref_x = ref_x[:, : -self.cls_dim]
+
+        # id classification
+        logits = self.final(f_x, label)
+        logits = self.logsoftmax(logits)
+
+        # reconstruct images
+        recon_img = torch.cat([ref_x, f_x], dim=1)
+        recon_img = recon_img.view(
+            label.shape[0], -1, self.init_img_size, self.init_img_size
+        )
+        recon_img = self._decode(recon_img)
+
+        return logits, f_x, recon_img
+
+    def _decode(self, x):
+        x = self.decoder(x)
+
+        return x
+
+    def _encoder(self, x):
+        x = self.backbone.features(x)
+        x = self.pooling(x).view(x.shape[0], -1)
+
+        if self.use_fc:
+            x = self.fc(x)
+
+        return x
+
+    def extract_features(self, x):
+        x = self._encoder(x)
+
+        return x[:, -self.cls_dim:]
