@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from sklearn.metrics.pairwise import cosine_distances
 
-from dataset import ImageDataset
-from model import (
+from module.dataset import ImageDataset
+from module.model import (
     ResNet152,
     SeResNet50,
     SeResNet152,
@@ -20,10 +20,10 @@ from model import (
     SeResNeXtArcFaceModel,
     NASNet,
 )
-from metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
-from loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
-from lr_scheduler import WarmupMultiStepLR
-from utils import set_random_seed
+from module.metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
+from module.loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
+from module.lr_scheduler import WarmupMultiStepLR
+from module.utils import set_random_seed
 
 
 # decay rate of learning rate
@@ -147,12 +147,15 @@ class Trainer:
             # update loss
             batch_loss += loss.item() * self.accumulate_gradient
             self.writer.add_scalars(
-                "Loss", {"iter_loss": loss.item(), "avg_loss": batch_loss / (idx + 1)}, iters,
+                "Loss",
+                {"iter_loss": loss.item(), "avg_loss": batch_loss / (idx + 1)},
+                iters,
             )
 
             # update tqdm
             trange.set_postfix(
-                loss=batch_loss / (idx + 1), **{self.metric.name: self.metric.print_score()}
+                loss=batch_loss / (idx + 1),
+                **{self.metric.name: self.metric.print_score()}
             )
 
         if (idx + 1) % self.accumulate_gradient != 0:
@@ -164,12 +167,16 @@ class Trainer:
     def _eval_one_epoch(self, best_accuracy):
         self.model.eval()
 
-        trange = tqdm(enumerate(self.val_loader), total=len(self.val_loader), desc="Valid")
+        trange = tqdm(
+            enumerate(self.val_loader), total=len(self.val_loader), desc="Valid"
+        )
 
         self.val_metric.reset()
 
         with torch.no_grad():
-            gallery = self.model.extract_features(self.gallery["images"].to(self.device))
+            gallery = self.model.extract_features(
+                self.gallery["images"].to(self.device)
+            )
             gallery = gallery.cpu().numpy()
 
             gallery_label = self.gallery["labels"].cpu().numpy()
@@ -198,7 +205,9 @@ class Trainer:
                     self.val_metric.update(preds, labels)
 
                     # update tqdm
-                    trange.set_postfix(**{self.val_metric.name: self.val_metric.print_score()})
+                    trange.set_postfix(
+                        **{self.val_metric.name: self.val_metric.print_score()}
+                    )
 
             _val_score = self.val_metric.get_score()
 
@@ -209,7 +218,9 @@ class Trainer:
                 print("Best model saved!")
                 best_accuracy = _val_score
                 self.save(
-                    os.path.join(self.save_dir, "model_best_{:.5f}.pth.tar".format(best_accuracy))
+                    os.path.join(
+                        self.save_dir, "model_best_{:.5f}.pth.tar".format(best_accuracy)
+                    )
                 )
 
         return best_accuracy
@@ -227,30 +238,51 @@ if __name__ == "__main__":
     parser.add_argument("query_path", type=str, help="Path to query files.")
     parser.add_argument("gallery_path", type=str, help="Path to gallery files.")
     parser.add_argument("save_dir", type=str, help="Where to save trained model.")
-    parser.add_argument("--model", type=str, default="resnet152", help="Train which model.")
+    parser.add_argument(
+        "--model", type=str, default="resnet152", help="Train which model."
+    )
     parser.add_argument("--epochs", type=int, default=5, help="Epochs.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
-    parser.add_argument("--weight_decay", type=float, default=1e-6, help="Weight decay rate.")
+    parser.add_argument(
+        "--weight_decay", type=float, default=1e-6, help="Weight decay rate."
+    )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size.")
     parser.add_argument("--scale", type=float, default=30.0, help="Scale for arcface.")
     parser.add_argument("--margin", type=float, default=0.5, help="Margin for arcface.")
-    parser.add_argument("--n_workers", type=int, default=8, help="Number of worker for dataloader.")
     parser.add_argument(
-        "--ag", type=int, default=1, help="Accumulate gradients before updating the weight.",
+        "--n_workers", type=int, default=8, help="Number of worker for dataloader."
     )
-    parser.add_argument("--smoothing", action="store_true", help="Whether to smooth label.")
-    parser.add_argument("--triplet", action="store_true", help="Whether to use triplet loss.")
-    parser.add_argument("--center", action="store_true", help="Whether to use center loss.")
+    parser.add_argument(
+        "--ag",
+        type=int,
+        default=1,
+        help="Accumulate gradients before updating the weight.",
+    )
+    parser.add_argument(
+        "--smoothing", action="store_true", help="Whether to smooth label."
+    )
+    parser.add_argument(
+        "--triplet", action="store_true", help="Whether to use triplet loss."
+    )
+    parser.add_argument(
+        "--center", action="store_true", help="Whether to use center loss."
+    )
     parser.add_argument(
         "--dist",
         type=str,
         default="euclidean",
         help="Which distrance function to user, euclidean or cos.",
     )
-    parser.add_argument("--feature_dim", type=int, default=512, help="Final features dimension.")
-    parser.add_argument("--lr_scheduler", action="store_true", help="Whether to use scheduler.")
     parser.add_argument(
-        "--re_ranking", action="store_true", help="Whether to use re-ranking to calculate rank 1.",
+        "--feature_dim", type=int, default=512, help="Final features dimension."
+    )
+    parser.add_argument(
+        "--lr_scheduler", action="store_true", help="Whether to use scheduler."
+    )
+    parser.add_argument(
+        "--re_ranking",
+        action="store_true",
+        help="Whether to use re-ranking to calculate rank 1.",
     )
     parser.add_argument("--k1", type=int, default=20, help="K1 value for re-ranking.")
     parser.add_argument("--k2", type=int, default=6, help="K2 value for re-ranking.")
@@ -268,7 +300,10 @@ if __name__ == "__main__":
     # prepare dataset
     train_dataset = ImageDataset(args.image_dir, args.label_path)
     train_dataloader = DataLoader(
-        train_dataset, shuffle=True, batch_size=args.batch_size, num_workers=args.n_workers,
+        train_dataset,
+        shuffle=True,
+        batch_size=args.batch_size,
+        num_workers=args.n_workers,
     )
 
     val_dataset = ImageDataset(
@@ -330,7 +365,9 @@ if __name__ == "__main__":
         model = NASNet(train_dataset.get_num_classes(), args.feature_dim)
 
     # prepare optimizer
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
 
     # criterion
     criterion = []
@@ -360,6 +397,9 @@ if __name__ == "__main__":
                 1.0,
             )
         ]
+
+    if args.model == "":
+        criterion += [("ReconstructionLoss", nn.MSELoss(), 1.0)]
 
     # scheduler
     scheduler = None
