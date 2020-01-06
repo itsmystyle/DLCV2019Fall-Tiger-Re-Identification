@@ -85,6 +85,11 @@ class Trainer:
                 "SeResNeXtArcFaceModel",
             ]:
                 preds, features = self.model(images, labels)
+            elif self.model.__class__.__name__ in ["FRNet"]:
+                ref_images = batch["ref_images"].to(self.device)
+                preds, features, reconstructed_images = self.model(
+                    images, ref_images, labels
+                )
             else:
                 preds, features = self.model(images)
 
@@ -97,6 +102,8 @@ class Trainer:
 
                 if name in ["TripletLoss", "CenterLoss"]:
                     loss += scale * criterion(features, labels)
+                elif name in ["ReconstructionLoss"]:
+                    loss += scale * criterion(ref_images, reconstructed_images)
                 else:
                     loss += scale * criterion(preds, labels)
 
