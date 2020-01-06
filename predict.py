@@ -28,22 +28,14 @@ if __name__ == "__main__":
     parser.add_argument("query_path", type=str, help="Path to query files.")
     parser.add_argument("gallery_path", type=str, help="Path to gallery files.")
     parser.add_argument("model_dir", type=str, help="Where to save trained model.")
-    parser.add_argument(
-        "model_architecture", type=str, help="Which model architecture to use."
-    )
+    parser.add_argument("model_architecture", type=str, help="Which model architecture to use.")
     parser.add_argument("output_dir", type=str, help="Output file path.")
-    parser.add_argument(
-        "--n_workers", type=int, default=8, help="Number of worker for dataloader."
-    )
+    parser.add_argument("--n_workers", type=int, default=8, help="Number of worker for dataloader.")
     parser.add_argument("--scale", type=int, default=30, help="Scale for arcface.")
     parser.add_argument("--margin", type=float, default=0.5, help="Margin for arcface.")
+    parser.add_argument("--feature_dim", type=int, default=512, help="Final features dimension.")
     parser.add_argument(
-        "--feature_dim", type=int, default=512, help="Final features dimension."
-    )
-    parser.add_argument(
-        "--re_ranking",
-        action="store_true",
-        help="Whether to use re-ranking to calculate rank 1.",
+        "--re_ranking", action="store_true", help="Whether to use re-ranking to calculate rank 1.",
     )
     parser.add_argument("--k1", type=int, default=20, help="K1 value for re-ranking.")
     parser.add_argument("--k2", type=int, default=6, help="K2 value for re-ranking.")
@@ -61,9 +53,7 @@ if __name__ == "__main__":
     dataset = ImageDataset(
         args.image_dir, args.query_path, train=False, gallery_path=args.gallery_path
     )
-    dataloader = DataLoader(
-        dataset, shuffle=False, batch_size=1, num_workers=args.n_workers
-    )
+    dataloader = DataLoader(dataset, shuffle=False, batch_size=1, num_workers=args.n_workers)
     gallery_images = dataset.get_gallery()
 
     # prepare model
@@ -85,23 +75,11 @@ if __name__ == "__main__":
         )
     elif args.model_architecture == "seresnext50_arcface":
         model = SeResNeXtArcFaceModel(
-            NUM_CLASSES,
-            args.scale,
-            args.margin,
-            args.feature_dim,
-            50,
-            True,
-            device=device,
+            NUM_CLASSES, args.scale, args.margin, args.feature_dim, 50, True, device=device,
         )
     elif args.model_architecture == "seresnext101_arcface":
         model = SeResNeXtArcFaceModel(
-            NUM_CLASSES,
-            args.scale,
-            args.margin,
-            args.feature_dim,
-            101,
-            True,
-            device=device,
+            NUM_CLASSES, args.scale, args.margin, args.feature_dim, 101, True, device=device,
         )
     elif args.model_architecture == "nasnet":
         model = NASNet(NUM_CLASSES, args.feature_dim)
@@ -115,16 +93,16 @@ if __name__ == "__main__":
     trange = tqdm(enumerate(dataloader), total=len(dataloader), desc="Inferencing")
 
     with torch.no_grad():
-        gallery = model.extract_features(gallery_images[0].to(device))
+        gallery = model.extract_features(gallery_images["images"].to(device))
         gallery = gallery.cpu().numpy()
-        gallery_path = gallery_images[2]
+        gallery_path = gallery_images["img_paths"]
 
         feats = []
         labels = []
 
         for idx, batch in trange:
 
-            images = batch[0].to(device)
+            images = batch["images"].to(device)
 
             feature = model.extract_features(images)
             feature = feature.cpu().numpy()
@@ -140,9 +118,7 @@ if __name__ == "__main__":
 
     if args.re_ranking:
         feats = np.concatenate(feats)
-        distmat = re_ranking(
-            feats, gallery, k1=args.k1, k2=args.k2, lambda_value=args.lambda_value
-        )
+        distmat = re_ranking(feats, gallery, k1=args.k1, k2=args.k2, lambda_value=args.lambda_value)
         labels = gallery_path[distmat.argmin(axis=1)]
     else:
         labels = np.asarray(labels)
