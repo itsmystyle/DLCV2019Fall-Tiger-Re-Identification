@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from sklearn.metrics.pairwise import cosine_distances
 
-from module.dataset import ImageDataset
-from module.model import (
+from dataset import ImageDataset
+from model import (
     ResNet152,
     SeResNet50,
     SeResNet152,
@@ -20,10 +20,10 @@ from module.model import (
     SeResNeXtArcFaceModel,
     NASNet,
 )
-from module.metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
-from module.loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
-from module.lr_scheduler import WarmupMultiStepLR
-from module.utils import set_random_seed
+from metrics.metrics import MulticlassAccuracy, Accuracy, ReRankingAccuracy
+from loss import CrossEntropyLabelSmooth, TripletLoss, CenterLoss
+from lr_scheduler import WarmupMultiStepLR
+from utils import set_random_seed
 
 
 # decay rate of learning rate
