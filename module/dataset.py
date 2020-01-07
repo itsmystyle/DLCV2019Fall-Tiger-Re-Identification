@@ -25,7 +25,9 @@ RE_PROB = 0.5
 
 
 class ImageDataset(Dataset):
-    def __init__(self, image_path, label_path, gallery_path=None, train=True, transform=None):
+    def __init__(
+        self, image_path, label_path, gallery_path=None, train=True, transform=None
+    ):
         self.train = train
         self.image_path = image_path
         self.label_path = label_path
@@ -55,6 +57,7 @@ class ImageDataset(Dataset):
                             contrast=CONTRAST_PROB,
                             hue=HUE_PROB,
                         ),
+                        # T.RandomHorizontalFlip(0.5),
                         T.Pad(PADDING),
                         T.RandomCrop(SIZE),
                         T.ToTensor(),
@@ -63,7 +66,9 @@ class ImageDataset(Dataset):
                     ]
                 )
             else:
-                self.transform = T.Compose([T.Resize(SIZE), T.ToTensor(), T.Normalize(MEAN, STD)])
+                self.transform = T.Compose(
+                    [T.Resize(SIZE), T.ToTensor(), T.Normalize(MEAN, STD)]
+                )
 
     def __len__(self):
         return self.label.shape[0]
@@ -121,15 +126,15 @@ class PairwiseImageDataset(Dataset):
             self.transform = T.Compose(
                 [
                     T.Resize(SIZE),
-                    # T.RandomRotation(DEGREE),
-                    # T.ColorJitter(
-                    #     brightness=BRIGHT_PROB,
-                    #     saturation=SATURA_PROB,
-                    #     contrast=CONTRAST_PROB,
-                    #     hue=HUE_PROB,
-                    # ),
-                    # T.Pad(PADDING),
-                    # T.RandomCrop(SIZE),
+                    T.RandomRotation(DEGREE),
+                    T.ColorJitter(
+                        brightness=BRIGHT_PROB,
+                        saturation=SATURA_PROB,
+                        contrast=CONTRAST_PROB,
+                        hue=HUE_PROB,
+                    ),
+                    T.Pad(PADDING),
+                    T.RandomCrop(SIZE),
                     T.ToTensor(),
                     T.Normalize(MEAN, STD),
                 ]
@@ -169,7 +174,9 @@ if __name__ == "__main__":
     parser.add_argument("image_dir", type=str, help="Path to image directory.")
     parser.add_argument("label_path", type=str, help="Path to label file.")
     parser.add_argument("--gallery", type=str, help="Path to gallery file.")
-    parser.add_argument("--test", action="store_false", help="Whether dataset is train or test.")
+    parser.add_argument(
+        "--test", action="store_false", help="Whether dataset is train or test."
+    )
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
     parser.add_argument("--num_worker", type=int, default=0, help="Number of worker.")
 
@@ -189,7 +196,9 @@ if __name__ == "__main__":
     plt.title("Training Images")
     plt.imshow(
         np.transpose(
-            vutils.make_grid(data["images"].to("cpu")[:64], padding=2, normalize=True).cpu(),
+            vutils.make_grid(
+                data["images"].to("cpu")[:64], padding=2, normalize=True
+            ).cpu(),
             (1, 2, 0),
         ),
     )
@@ -199,7 +208,10 @@ if __name__ == "__main__":
     # Pairwise Dataset
     dataset = PairwiseImageDataset(args.image_dir, args.label_path)
     dataloader = DataLoader(
-        dataset, shuffle=False, batch_size=args.batch_size // 2, num_workers=args.num_worker
+        dataset,
+        shuffle=False,
+        batch_size=args.batch_size // 2,
+        num_workers=args.num_worker,
     )
 
     data = next(iter(dataloader))
@@ -209,7 +221,8 @@ if __name__ == "__main__":
     plt.title("Training Images")
     plt.imshow(
         np.transpose(
-            vutils.make_grid(data.to("cpu")[:64], padding=2, normalize=True).cpu(), (1, 2, 0),
+            vutils.make_grid(data.to("cpu")[:64], padding=2, normalize=True).cpu(),
+            (1, 2, 0),
         ),
     )
     plt.savefig(os.path.join("./", "example2.png"))
