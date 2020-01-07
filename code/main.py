@@ -16,14 +16,14 @@ def collate_fn(batch):
 	return image, self_label, pos_image, neg_image
 '''
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 
 if __name__ == '__main__':
 	
-	train_dir = "../dataset/aug_img/"
+	train_dir = "../dataset/imgs/"
 	valid_dir = "../dataset/imgs/"
-	label_path = "../dataset/train_aug.csv"
+	label_path = "../dataset/train.csv"
 	query_path = "../dataset/query.csv"
 	gallery_path = "../dataset/gallery.csv"
 
@@ -36,6 +36,8 @@ if __name__ == '__main__':
 	valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=1, num_workers=7)
 
 	model = Model(len(train_dataset.id2idx))
+	
+	print(len(train_dataset.id2idx))
 
 	epochs = 100
 
@@ -58,7 +60,6 @@ if __name__ == '__main__':
 		if valid_ac > best_ac:
 			torch.save(model.state_dict(), out_dir + "best_model_"+str(np.round(valid_ac,5)))
 			best_ac = valid_ac
-
-
+		
 		print("Training Loss:{:.5}\tTraining Accuracy:{:.5}\tValidation Accuracy:{:.5}".format(train_loss, train_ac, valid_ac))
 		print("==============================")

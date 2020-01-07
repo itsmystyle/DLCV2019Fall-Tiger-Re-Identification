@@ -7,7 +7,7 @@ import math
 
 import torch.hub
 import pretrainedmodels
-
+import torchvision
 
 class Model(nn.Module):
 
@@ -21,10 +21,11 @@ class Model(nn.Module):
 		
 		# Modify the last conv stride to 1
 		#self.backbone = pretrainedmodels.se_resnext101_32x4d(num_classes=1000, pretrained='imagenet')
+		#self.backbone = torchvision.models.resnet101(pretrained=True)
 		self.backbone.layer4[0].downsample[0].stride = (1, 1)
 		self.backbone.layer4[0].conv2.stride = (1, 1)
 
-		self.getFeat = nn.Sequential(
+		self.getNormalFeat = nn.Sequential(
 			self.backbone.conv1,
 			self.backbone.bn1,
 			self.backbone.relu,
@@ -36,34 +37,109 @@ class Model(nn.Module):
 			self.backbone.layer3,
 			self.backbone.layer4,
 			#self.backbone.avgpool,
+			nn.AdaptiveAvgPool2d(1),
 		)
 
-		self.spatial_pyramid_pooling = SpatialPyramidPool([1], mode='avg')
-		#self.spatial_pyramid_pooling = nn.AdaptiveAvgPool2d(1)
 
-		self.BN_layer = nn.BatchNorm1d(2048)
-		# self.BN_layer.bias.requires_grad_(False)
-		self.NormalOut = nn.Linear(2048, class_num, bias=False)
+		self.Normal_BN_layer = nn.BatchNorm1d(512)
+		self.Normal_BN_layer.bias.requires_grad_(False)
+		self.NormalRedDim = nn.Linear(2048, 512, bias=False)
+
+
+		self.NormalOut = nn.Sequential(
+			nn.Dropout(0.5),
+			nn.Linear(512, class_num, bias=False)
+		)
+
 
 		# initialization:
-		self.BN_layer.apply(weights_init_kaiming)
+		self.Normal_BN_layer.apply(weights_init_kaiming)
 		self.NormalOut.apply(weights_init_classifier)
+		self.NormalRedDim.apply(weights_init_classifier)
+	
+		self.erase_backbone = torch.hub.load('moskomule/senet.pytorch', 'se_resnet50', pretrained=True)
+		self.erase_backbone.layer4[0].downsample[0].stride = (1, 1)
+		self.erase_backbone.layer4[0].conv2.stride = (1, 1)
+
+		self.getEraseFeat = nn.Sequential(
+			self.erase_backbone.conv1,
+			self.erase_backbone.bn1,
+			self.erase_backbone.relu,
+			self.erase_backbone.maxpool,
+			
+			self.erase_backbone.layer1,
+			self.erase_backbone.layer2,
+			self.erase_backbone.layer3,
+			self.erase_backbone.layer4,
+			nn.AdaptiveAvgPool2d(1),
+		)
+
+
+		self.Erase_BN_layer = nn.BatchNorm1d(512)
+		self.Erase_BN_layer.bias.requires_grad_(False)
+
+		self.EraseRedDim = nn.Linear(2048, 512, bias=False)
+
+		self.EraseOut = nn.Sequential(
+			nn.Dropout(0.5),
+			nn.Linear(512, class_num, bias=False)
+		)
+
+		# initialization:
+		self.Erase_BN_layer.apply(weights_init_kaiming)
+		self.EraseOut.apply(weights_init_classifier)
+		self.EraseRedDim.apply(weights_init_classifier)
+		
+		self.Fuse_BN_layer = nn.BatchNorm1d(512)
+		self.Fuse_BN_layer.bias.requires_grad_(False)
+
+		self.FuseRedDim = nn.Linear(4096, 512, bias=False)
+
+		self.FuseOut = nn.Sequential(
+			nn.Dropout(0.5),
+			nn.Linear(512, class_num, bias=False)
+		)
+		
+		self.Fuse_BN_layer.apply(weights_init_kaiming)
+		self.FuseOut.apply(weights_init_classifier)
+		self.FuseRedDim.apply(weights_init_classifier)
+		
+
 
 	def forward(self, img):
-
 		pool_img_feat = self.getFeature(img)
-
 		return pool_img_feat
 
 
 
-	def getFeature(self, img):
+	def getFeature(self, img, img_erase):
 
-		img_feat = self.getFeat(img)
-		pool_img_feat = self.spatial_pyramid_pooling(img_feat).flatten(start_dim=1)
-		#pool_img_feat = img_feat.flatten(start_dim=1)
+		norm_feat = self.getNormalFeat(img).flatten(start_dim=1)
+		norm_red_feat = self.NormalRedDim(norm_feat)
+		bn_norm_feat = self.Normal_BN_layer(norm_red_feat)
+		
+		erase_feat = self.getEraseFeat(img_erase).flatten(start_dim=1)
+		erase_red_feat = self.EraseRedDim(erase_feat)
+		bn_erase_feat = self.Erase_BN_layer(erase_red_feat)
 
-		return pool_img_feat
+		fuse_feat = torch.cat([norm_feat.detach(), erase_feat.detach()], dim=1)
+		fuse_feat = self.FuseRedDim(fuse_feat)
+		bn_fuse_feat = self.Fuse_BN_layer(fuse_feat)
+
+		return norm_feat, bn_norm_feat, erase_feat, bn_erase_feat, fuse_feat, bn_fuse_feat
+	
+	
+	
+	def getPredFeature(self, img, img_erase):
+		norm_feat = self.getNormalFeat(img).flatten(start_dim=1)
+		erase_feat = self.getEraseFeat(img_erase).flatten(start_dim=1)
+
+		fuse_feat = torch.cat([norm_feat, erase_feat], dim=1)
+		fuse_feat = self.FuseRedDim(fuse_feat)
+		bn_fuse_feat = self.Fuse_BN_layer(fuse_feat)
+
+		return bn_fuse_feat
+	
 
 
 def weights_init_kaiming(m):

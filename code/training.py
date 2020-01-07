@@ -36,41 +36,34 @@ def train(model, optim, dataloader, update_size=32):
 			batch_count = 0.0
 
 
-		image, image_label, pos_image, neg_image = data
-		
+		#image, image_label, pos_image, neg_image = data
+		image, erase_image, image_label = data
+
 		image = image.cuda()
-		pos_image = pos_image.cuda()
-		neg_image = neg_image.cuda()
+		erase_image = erase_image.cuda()
 		image_label = image_label.cuda().long()
 
-		#image_out = []
-		#pos_image_out = []
-		#neg_image_out = []
 
 		batch_size = len(image)
 
-		#for i in range(batch_size):
-		#	image_out.append( model.getFeature(image[i].cuda().unsqueeze(0)))
-		#	pos_image_out.append( model.getFeature(pos_image[i].cuda().unsqueeze(0)))
-		#	neg_image_out.append( model.getFeature(neg_image[i].cuda().unsqueeze(0)))
-
-		#image_out = torch.stack(image_out).squeeze(1)
-		#pos_image_out = torch.stack(pos_image_out).squeeze(1)
-		#neg_image_out = torch.stack(neg_image_out).squeeze(1)
+		norm_feat, bn_norm_feat, erase_feat, bn_erase_feat, fuse_feat, bn_fuse_feat = model.getFeature(image, erase_image)
 		
-		image_out = model.getFeature(image)
-		pos_image_out = model.getFeature(pos_image)
-		neg_image_out = model.getFeature(neg_image)
+		norm_cls = model.NormalOut(bn_norm_feat)
+		erase_cls = model.EraseOut(bn_erase_feat)
+		fuse_cls = model.FuseOut(bn_fuse_feat)
 		
-		bn_out = model.BN_layer(image_out)
-		image_cls = model.NormalOut(F.dropout(bn_out, p=0.0))
-		#image_label = torch.Tensor(image_label).cuda().long()
-
-		# image_out = model(image)
-		# pos_image_out = model(pos_image)[-1].detach()
-		# neg_image_out = model(neg_image)[-1].detach()
 		
-
+		norm_trip = 0.0 #2.0 * TripletLoss(margin=0.4)(norm_feat, image_label)[0]
+		erase_trip = 0.0 #2.0 * TripletLoss(margin=0.4)(erase_feat, image_label)[0]
+		fuse_trip = 2.0 * TripletLoss(margin=0.4)(fuse_feat, image_label)[0]		
+		
+		norm_CE = LabelSmoothingCrossEntropy(0.1)(norm_cls, image_label)
+		erase_CE = LabelSmoothingCrossEntropy(0.1)(erase_cls, image_label)
+		fuse_CE = LabelSmoothingCrossEntropy(0.1)(fuse_cls, image_label)
+		
+		loss = norm_trip + erase_trip + fuse_trip + norm_CE + erase_CE + fuse_CE		
+		loss.backward()
+		'''
 		triplet_loss = 2.0 * TripletLoss(margin=0.3)(image_out, image_label)[0]
 		#pos_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out, model.BN_layer(pos_image_out), torch.tensor(1.0).cuda())
 		#neg_loss = nn.CosineEmbeddingLoss(margin=0.25)(image_out, model.BN_layer(neg_image_out), torch.tensor(-1.0).cuda())
@@ -80,13 +73,15 @@ def train(model, optim, dataloader, update_size=32):
 
 		loss = triplet_loss + cross_entropy #+ cross_entropy_erase + cross_entropy_fuse
 		# loss = pos_loss + neg_loss + cross_entropy
-		# loss = cross_entropy
+		#loss = cross_entropy
+		
 		loss.backward()
+		'''
 
 		total_loss += loss.item()
 		batch_loss += loss.item()
 
-		pred_prob = F.softmax(image_cls, dim=1)
+		pred_prob = F.softmax(fuse_cls, dim=1)
 		pred = pred_prob.argmax(dim=1)
 		
 		correct = (pred.view(-1,1) == image_label.view(-1,1)).sum()
@@ -115,26 +110,29 @@ def evaluate(model, dataloader):
 
 	with torch.no_grad():
 
-		allGaleryImg = dataloader.dataset.getGalleryTensor()
+		allGaleryImg, allEraseImg = dataloader.dataset.getGalleryTensor()
 		allCandidate = []
 		for i in range(len(allGaleryImg)):
 			img = allGaleryImg[i].cuda()
-			feat = model.BN_layer(model.getFeature(img))
-			# feat = model.getFeature(img)[-2]
+			erase_img = allEraseImg[i].cuda()
+			
+			fuse_feat = model.getPredFeature(img, erase_img)
+			
 			img = img.cpu()
-			allCandidate.append(feat)
-		allCandidate = torch.stack(allCandidate).squeeze(1)
+			erase_img = erase_img.cpu()
+			allCandidate.append(fuse_feat)
 
+		allCandidate = torch.stack(allCandidate).squeeze(1)
 
 		trange = tqdm(dataloader)
 
 		for data in trange:
 			
-			img, label = data
+			img, erase_img, label = data
 			img = img.cuda()
+			erase_img = erase_img.cuda()			
 
-			feat = model.BN_layer(model.getFeature(img))
-			# feat = model.getFeature(img)[-2]
+			feat = model.getPredFeature(img, erase_img)
 
 			# score = torch.mm(feat, allCandidate.transpose(0,1))
 			score = F.cosine_similarity(feat.expand(allCandidate.size(0), feat.size(1)), allCandidate)
@@ -151,3 +149,6 @@ def evaluate(model, dataloader):
 	total_ac /= len(dataloader)
 
 	return total_ac, all_pred
+
+
+

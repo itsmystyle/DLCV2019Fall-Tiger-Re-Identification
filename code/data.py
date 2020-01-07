@@ -58,10 +58,29 @@ class ImageDataset(Dataset):
 		T.Pad(PADDING),
                 T.RandomCrop(SIZE),
                 T.ToTensor(),
-                # RandomErasing(probability=0.5, mean=MEAN),
                 T.Normalize(MEAN, STD),
             ]
         )
+
+        self.transform2 = T.Compose(
+            [
+                T.Resize(SIZE),
+                T.RandomRotation(DEGREE),
+                T.ColorJitter(
+                    brightness=BRIGHT_PROB,
+                    saturation=SATURA_PROB,
+                    contrast=CONTRAST_PROB,
+                    hue=HUE_PROB,
+                ),
+		T.Pad(PADDING),
+                T.RandomCrop(SIZE),
+                T.ToTensor(),
+                RandomErasing(probability=1.0, mean=MEAN),
+                T.Normalize(MEAN, STD),
+            ]
+        )
+
+
 
     def __len__(self):
         return self.label.shape[0]
@@ -70,11 +89,14 @@ class ImageDataset(Dataset):
         img_fn = self.label.iloc[index].img_file
         path = os.path.join(self.image_path, img_fn)
         image = Image.open(path)
-        image = self.transform(image)
-        
+        plain_image = self.transform(image)
+        erase_image = self.transform2(image)
+
         label = self.label.iloc[index].id
         self_label = torch.tensor(label, dtype=torch.long)
         
+        
+        '''
         # positive example
         pos_fn = random.sample(self.idx2image[label], 1)[0]
         while pos_fn == img_fn:
@@ -93,9 +115,11 @@ class ImageDataset(Dataset):
         neg_image = Image.open(os.path.join(self.image_path, neg_fn))
         neg_image = self.transform(neg_image)
         neg_label = torch.tensor(neg_idx, dtype=torch.long)
-
+        
         return image, self_label, pos_image, neg_image
-
+        '''
+        
+        return plain_image, erase_image, self_label
 
 
 class QueryDataset(Dataset):
@@ -115,6 +139,15 @@ class QueryDataset(Dataset):
                 T.Normalize(MEAN, STD),
             ]
         )
+	
+        self.transform2 = T.Compose(
+            [
+                T.Resize(SIZE),
+                T.ToTensor(),
+                RandomErasing(probability=1.0, mean=MEAN),
+                T.Normalize(MEAN, STD),
+            ]
+        )	
 
     def __len__(self):
         return self.query.shape[0]
@@ -124,24 +157,29 @@ class QueryDataset(Dataset):
         img_fn = d.img_file
         path = os.path.join(self.image_path, img_fn)
         image = Image.open(path)
-        image = self.transform(image)
+        erase_image = self.transform2(image)
+        norm_image = self.transform(image)
         
         label = d.ans_id
         self_label = torch.tensor(label, dtype=torch.long)
         
-        return image, self_label
+        return norm_image, erase_image, self_label
+
 
     def getGalleryTensor(self):
 
         allGalleryImage = []
+        allEraseImage = []
         for i in range(self.gallery.shape[0]):
             img_fn = self.gallery.iloc[i].img_file
             path = os.path.join(self.image_path, img_fn)
             image = Image.open(path)
-            image = self.transform(image).unsqueeze(0)
-            allGalleryImage.append(image)
+            norm_image = self.transform(image).unsqueeze(0)
+            erase_image = self.transform2(image).unsqueeze(0)
+            allGalleryImage.append(norm_image)
+            allEraseImage.append(erase_image)
 
-        return allGalleryImage
+        return allGalleryImage, allEraseImage
 
 
 import math
@@ -150,7 +188,7 @@ import random
 
 class RandomErasing(object):
 
-    def __init__(self, probability=0.5, sl=0.01, sh=0.2, r1=0.3, mean=(0.4914, 0.4822, 0.4465)):
+    def __init__(self, probability=0.5, sl=0.005, sh=0.1, r1=0.3, mean=(0.4914, 0.4822, 0.4465)):
         self.probability = probability
         self.mean = mean
         self.sl = sl
@@ -223,3 +261,6 @@ if __name__ == "__main__":
     #plt.show()
     #plt.savefig("./test.jpg")
     '''
+
+
+
