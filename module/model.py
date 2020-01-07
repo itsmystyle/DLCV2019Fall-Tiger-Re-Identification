@@ -391,13 +391,27 @@ class FRNet(nn.Module):
             self.backbone = se_resnext50_32x4d(num_classes=1000, pretrained="imagenet")
         else:
             self.backbone = se_resnext101_32x4d(num_classes=1000, pretrained="imagenet")
+        # Freeze backbone
+        # for child in self.backbone.children():
+        #     for param in child.parameters():
+        #         param.requires_grad = False
         final_in_features = self.backbone.last_linear.in_features
         self.pooling = GeM()
         self.use_fc = use_fc
         self.fc_dim = fc_dim
         if use_fc:
+            # self.fc = nn.Sequential(
+            #     nn.Linear(final_in_features, fc_dim), nn.BatchNorm1d(fc_dim)
+            # )
             self.fc = nn.Sequential(
-                nn.Linear(final_in_features, fc_dim), nn.BatchNorm1d(fc_dim)
+                nn.Linear(final_in_features, 2048),
+                nn.BatchNorm1d(2048),
+                nn.ReLU(inplace=True),
+                nn.Linear(2048, 1024),
+                nn.BatchNorm1d(1024),
+                nn.ReLU(inplace=True),
+                nn.Linear(1024, fc_dim),
+                nn.BatchNorm1d(fc_dim),
             )
             self.fc.apply(weights_init_kaiming)
 
@@ -440,11 +454,9 @@ class FRNet(nn.Module):
 
     def forward(self, x, ref_x, label):
         x = self._encoder(x)
-        # _, f_x = x[:, : -self.cls_dim], x[:, -self.cls_dim :]
         f_x = x[:, -self.cls_dim:]
 
         ref_x = self._encoder(ref_x)
-        # b_ref_x, _ = ref_x[:, : -self.cls_dim], ref_x[:, -self.cls_dim :]
         ref_x = ref_x[:, : -self.cls_dim]
 
         # id classification
