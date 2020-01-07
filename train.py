@@ -221,8 +221,10 @@ if __name__ == "__main__":
             )
         ]
 
-    if args.model == "":
+    if args.model == "ours":
         criterion += [("ReconstructionLoss", nn.MSELoss(), 1.0)]
+
+    print(criterion)
 
     # scheduler
     scheduler = None
