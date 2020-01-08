@@ -417,6 +417,6 @@ for epoch in range(150):
     if epoch % 1 == 0:
         rank1 = test(model, query_dataloader, gallery_dataloader, epoch)
         print(rank1)
-
+###print("fuck")
     if epoch > 100:
         pesudo_label(model, left_dataloader, dataset.idx2id)
