@@ -11,3 +11,4 @@ tensorboardX==1.9
 toolz==0.10.0
 torch==1.2.0
 torchvision==0.2.1
+pretrainedmodels==0.7.4
