@@ -13,7 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
-SIZE = [384, 384]
+#print("fuck")
+SIZE = [512, 512]
 DEGREE = 10
 BRIGHT_PROB = 0.2
 SATURA_PROB = 0.2
@@ -47,12 +48,20 @@ class ImageDataset(Dataset):
             if self.train:
                 self.transform = T.Compose(
                     [
-                        T.Resize(SIZE, interpolation=3),
+                        T.Resize(SIZE),
+                        T.RandomRotation(DEGREE),
+                        T.ColorJitter(
+                            brightness=BRIGHT_PROB,
+                            saturation=SATURA_PROB,
+                            contrast=CONTRAST_PROB,
+                            hue=HUE_PROB,
+                        ),
+                        # T.RandomHorizontalFlip(0.5),
+                        T.Pad(PADDING),
                         T.RandomCrop(SIZE),
-                        T.RandomHorizontalFlip(),
                         T.ToTensor(),
+                        # RandomErasing(probability=RE_PROB, mean=MEAN),
                         T.Normalize(MEAN, STD),
-                        RandomErasing(probability = 0.5, mean=[0.0, 0.0, 0.0])
                     ]
                 )
             else:

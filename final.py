@@ -326,7 +326,7 @@ def test(model, query, gallery, epoch,\
     return sum(preds==q_pids)/len(q_pids)
 
 
-dataset = ImageDataset("imgs", "my_train.csv", train=True)
+dataset = ImageDataset("imgs", "train.csv", train=True)
 train_dataloader = DataLoader(
     dataset, shuffle=True, batch_size=8, num_workers=32
 )
@@ -352,13 +352,15 @@ if cuda:
     model = nn.DataParallel(model).cuda()
 
 
-for epoch in range(150):
+for epoch in range(99):
 
     model.train()
+    '''
     dataset = ImageDataset("imgs", "my_train.csv", train=True)
     train_dataloader = DataLoader(
         dataset, shuffle=True, batch_size=8, num_workers=32
     )
+    '''
     all_loss = 0.0
     trange = tqdm(
         enumerate(train_dataloader),
@@ -370,7 +372,7 @@ for epoch in range(150):
 
     for idx, (imgs, label, path) in trange:
         
-        if epoch < 0:
+        if epoch < 1:
             for i in range(label.shape[0]):
                 ground_label.append(dataset.idx2id[label[i].item()])
                 ground_path.append(path[i])

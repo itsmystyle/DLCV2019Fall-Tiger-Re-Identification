@@ -8,6 +8,8 @@ from collections import defaultdict
 from torchtools import init_params
 from shallow_cam import get_attention_module_instance
 
+import pdb
+
 
 class MultiBranchNetwork(nn.Module):
 
@@ -96,7 +98,7 @@ class MultiBranchNetwork(nn.Module):
         fmap_dict['intermediate'].extend(intermediate_fmaps)
 
         predict_features, xent_features, triplet_features = [], [], []
-
+        #pdb.set_trace()
         for branch in self.branches:
             predict, xent, triplet, fmap = branch(x)
             predict_features.extend(predict)
