@@ -1,6 +1,6 @@
 data
-models
-!models/best_model/.gitkeep
+models/*
+!models/best_model
 __pycache__
 *.csv
 *.png
