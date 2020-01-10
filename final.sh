@@ -1,2 +1,2 @@
 wget 'https://www.dropbox.com/s/hzt62bhqe7esgqk/model_best_0.76205.pth.tar?dl=1' -O models/best_model/model_best_0.76205.pth.tar
-python3 predict.py $1 $2 $3 models/best_model/model_best_0.76205.pth.tar seresnext50_arcface $4 --re_ranking --n_workers 8
+python3 predict.py $1 $2 $3 models/best_model/model_best_0.76205.pth.tar seresnext50_arcface $4 --re_ranking --n_workers 8 --k1 25
