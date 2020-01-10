@@ -26,12 +26,24 @@ RE_PROB = 0.5
 
 class ImageDataset(Dataset):
     def __init__(
-        self, image_path, label_path, gallery_path=None, train=True, transform=None
+        self,
+        image_path,
+        label_path,
+        gallery_path=None,
+        train=True,
+        transform=None,
+        with_label=True,
     ):
         self.train = train
+        self.with_label = with_label
         self.image_path = image_path
         self.label_path = label_path
-        self.label = pd.read_csv(self.label_path, header=None, names=["id", "img_file"])
+        if self.with_label:
+            self.label = pd.read_csv(
+                self.label_path, header=None, names=["id", "img_file"]
+            )
+        else:
+            self.label = pd.read_csv(self.label_path, header=None, names=["img_file"])
 
         if not self.train:
             self.gallery_path = gallery_path
@@ -77,26 +89,40 @@ class ImageDataset(Dataset):
         path = os.path.join(self.image_path, self.label.iloc[index].img_file)
         image = Image.open(path)
         image = self.transform(image)
-        label = torch.tensor(self.label.iloc[index].id, dtype=torch.long)
 
-        # return image, label
-        return {"images": image, "labels": label}
+        if self.with_label:
+            label = torch.tensor(self.label.iloc[index].id, dtype=torch.long)
+            return {"images": image, "labels": label}
+        else:
+            return {"images": image}
 
     def get_num_classes(self):
         return len(self.id2idx)
 
     def get_gallery(self):
-        data = pd.read_csv(self.gallery_path, header=None, names=["id", "img_file"])
-        labels = torch.from_numpy(data.id.values)
-        images = []
-        for image in data.img_file:
-            image = Image.open(os.path.join(self.image_path, image))
-            image = self.transform(image)
-            images.append(image)
-        images = torch.stack(images)
-
-        # return images, labels, data.img_file.values
-        return {"images": images, "labels": labels, "img_paths": data.img_file.values}
+        if self.with_label:
+            data = pd.read_csv(self.gallery_path, header=None, names=["id", "img_file"])
+            labels = torch.from_numpy(data.id.values)
+            images = []
+            for image in data.img_file:
+                image = Image.open(os.path.join(self.image_path, image))
+                image = self.transform(image)
+                images.append(image)
+            images = torch.stack(images)
+            return {
+                "images": images,
+                "labels": labels,
+                "img_paths": data.img_file.values,
+            }
+        else:
+            data = pd.read_csv(self.gallery_path, header=None, names=["img_file"])
+            images = []
+            for image in data.img_file:
+                image = Image.open(os.path.join(self.image_path, image))
+                image = self.transform(image)
+                images.append(image)
+            images = torch.stack(images)
+            return {"images": images, "img_paths": data.img_file.values}
 
 
 class PairwiseImageDataset(Dataset):
