@@ -1,5 +1,7 @@
 data
 models
+!models/best_model/.gitkeep
 __pycache__
 *.csv
 *.png
+*.tar
