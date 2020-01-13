@@ -41,7 +41,7 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-    def forward(self, x):
+    def forward(self, x, label=None):
         residual = x
 
         out = self.conv1(x)
@@ -76,7 +76,7 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-    def forward(self, x):
+    def forward(self, x, label=None):
         residual = x
 
         out = self.conv1(x)
@@ -172,7 +172,7 @@ class ResNetCommonBranch(nn.Module):
 
         return [self.backbone1, self.backbone2]
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         x = self.backbone1(x)
         intermediate = x = self.shallow_cam(x)
@@ -194,7 +194,7 @@ class ResNetDeepBranch(nn.Module):
 
         return [self.backbone]
 
-    def forward(self, x):
+    def forward(self, x, label=None):
         return self.backbone(x)
 
 class ResNetMGNLikeCommonBranch(nn.Module):
@@ -220,7 +220,7 @@ class ResNetMGNLikeCommonBranch(nn.Module):
 
         return [self.backbone1, self.backbone2]
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         x = self.backbone1(x)
         intermediate = x = self.shallow_cam(x)
@@ -244,7 +244,7 @@ class ResNetMGNLikeDeepBranch(nn.Module):
 
         return [self.backbone]
 
-    def forward(self, x):
+    def forward(self, x, label=None):
         return self.backbone(x)
 
 

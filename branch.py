@@ -7,8 +7,11 @@ from collections import defaultdict
 
 from torchtools import init_params
 from shallow_cam import get_attention_module_instance
-
+from module.utils import ArcMarginProduct
 import pdb
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class MultiBranchNetwork(nn.Module):
@@ -91,16 +94,20 @@ class MultiBranchNetwork(nn.Module):
 
         return lst
 
-    def forward(self, x):
-        x, *intermediate_fmaps = self.common_branch(x)
+    def forward(self, x, label=None):
+        
+        x, *intermediate_fmaps = self.common_branch(x, label)
 
         fmap_dict = defaultdict(list)
         fmap_dict['intermediate'].extend(intermediate_fmaps)
 
         predict_features, xent_features, triplet_features = [], [], []
-        #pdb.set_trace()
+        
         for branch in self.branches:
-            predict, xent, triplet, fmap = branch(x)
+
+            #pdb.set_trace()
+            arg_x = branch[0](x)
+            predict, xent, triplet, fmap = branch[1](arg_x, label)
             predict_features.extend(predict)
             xent_features.extend(xent)
             triplet_features.extend(triplet)
@@ -136,7 +143,7 @@ class GlobalBranch(nn.Module):
         self.output_dim = args['global_dim']
         self.args = args
         self.num_classes = owner.num_classes
-
+        
         self._init_fc_layer()
         if args['global_max_pooling']:
             self.avgpool = nn.AdaptiveMaxPool2d(1)
@@ -144,15 +151,26 @@ class GlobalBranch(nn.Module):
             self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._init_classifier()
 
+        self.final = ArcMarginProduct(
+            self.output_dim, self.num_classes, multi_task=False,\
+                 s=30.0, m=0.5, device=device
+        )
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
     def backbone_modules(self):
 
         return []
 
     def _init_classifier(self):
 
+        #bn = nn.BatchNorm1d(self.output_dim)
+        inference_stage = nn.Linear(self.output_dim, self.output_dim)
         classifier = nn.Linear(self.output_dim, self.num_classes)
+        init_params(inference_stage)
         init_params(classifier)
 
+        #self.bn = bn
+        self.inference_stage = inference_stage
         self.classifier = classifier
 
     def _init_fc_layer(self):
@@ -174,7 +192,7 @@ class GlobalBranch(nn.Module):
 
         self.fc = fc
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         triplet, xent, predict = [], [], []
 
@@ -184,7 +202,12 @@ class GlobalBranch(nn.Module):
         x = self.fc(x)
         triplet.append(x)
         predict.append(x)
+        '''
+        x = self.inference_stage(x)
         x = self.classifier(x)
+        '''
+        x = self.final(x, label)
+        x = self.logsoftmax(x)
         xent.append(x)
 
         return predict, xent, triplet, {}
@@ -244,7 +267,7 @@ class NPBranch(nn.Module):
 
         return fc
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         triplet, xent, predict = [], [], []
 
@@ -295,11 +318,34 @@ class ABDBranch(nn.Module):
 
         self._init_classifiers()
 
+
     def backbone_modules(self):
 
         return []
 
     def _init_classifiers(self):
+
+        self.inference_stages = nn.ModuleList()
+        self.finals = nn.ModuleList()
+        self.logsoftmaxs = nn.ModuleList()
+
+        '''
+        for p in range(1, self.part_num + 1):
+            #bn = nn.BatchNorm1d(self.output_dim)
+            inference_stage = nn.Linear(self.output_dim, self.output_dim)
+            init_params(inference_stage)
+            #self.inference_stages.append(bn)
+            self.inference_stages.append(inference_stage)
+        '''
+
+        for p in range(1, self.part_num+1):
+            final = ArcMarginProduct(
+                self.output_dim, self.num_classes, multi_task=False,\
+                    s=30.0, m=0.5, device=device
+            )
+            self.finals.append(final)
+            logsoftmax = nn.LogSoftmax(dim=1)
+            self.logsoftmaxs.append(logsoftmax)
 
         self.classifiers = nn.ModuleList()
 
@@ -364,7 +410,7 @@ class ABDBranch(nn.Module):
         init_params(sum_conv)
         self.sum_conv = sum_conv
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         predict, xent, triplet = [], [], []
         fmap = defaultdict(list)
@@ -399,7 +445,15 @@ class ABDBranch(nn.Module):
             v = v.view(v.size(0), -1)
             triplet.append(v)
             predict.append(v)
+            '''
+            v = self.inference_stages[p](v)
             v = self.classifiers[p](v)
+            '''
+            
+            v = self.finals[p](v, label)
+            v = self.logsoftmaxs[p](v)
+            
+            #v = self.classifiers[p](v)
             xent.append(v)
 
         return predict, xent, triplet, fmap
@@ -474,7 +528,7 @@ class DANBranch(nn.Module):
             self.dan_module_names.add('pam_module')
             self.pam_module = pam_module
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         predict, xent, triplet = [], [], []
 

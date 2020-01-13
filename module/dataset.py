@@ -14,7 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
 #print("fuck")
-SIZE = [512, 512]
+SIZE = [256, 256]
 DEGREE = 10
 BRIGHT_PROB = 0.2
 SATURA_PROB = 0.2

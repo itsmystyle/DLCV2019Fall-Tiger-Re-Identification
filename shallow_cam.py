@@ -49,7 +49,7 @@ class DANetHead(nn.Module):
             nn.Conv2d(inter_channels, out_channels, 1)
         )
 
-    def forward(self, x):
+    def forward(self, x, label=None):
 
         feat2 = self.conv5c(x)
         sc_feat = self.attention_module(feat2)

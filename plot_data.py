@@ -15,6 +15,27 @@ with open('train.csv', newline='') as csvfile:
 print(len(_dict))
 print(_dict)
 
+_dict = defaultdict(int)
+with open('query.csv', newline='') as csvfile:
+    rows = csv.reader(csvfile)
+
+    for row in rows:
+        _dict[int(row[0])] +=1
+
+print(len(_dict))
+print(_dict)
+
+_dict = defaultdict(int)
+with open('gallery.csv', newline='') as csvfile:
+    rows = csv.reader(csvfile)
+
+    for row in rows:
+        _dict[int(row[0])] +=1
+
+print(len(_dict))
+print(_dict)
+
+'''
 train = pd.read_csv("train.csv", header=None, names=["id", "img_file"])
 query = pd.read_csv("query.csv", header=None, names=["id", "img_file"])
 gallery = pd.read_csv("gallery.csv", header=None, names=["id", "img_file"])
@@ -35,3 +56,4 @@ with open('left.csv', 'w', newline='')as csvfile:
     writer = csv.writer(csvfile)
     for img in left:
         writer.writerow([0, img])
+'''

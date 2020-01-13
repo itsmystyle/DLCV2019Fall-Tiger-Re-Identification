@@ -73,7 +73,7 @@ def argument_parser():
                         help="maximum epochs to run")
     parser.add_argument('--start-epoch', default=0, type=int,
                         help="manual epoch number (useful when restart)")
-    parser.add_argument('--stepsize', default=[], nargs='+', type=int,
+    parser.add_argument('--stepsize', default=[10, 30, 90, 210], nargs='+', type=int,
                         help="stepsize to decay learning rate")
     parser.add_argument('--gamma', default=0.1, type=float,
                         help="learning rate decay")
@@ -114,7 +114,7 @@ def argument_parser():
                         help="only use hard triplet loss")
     parser.add_argument('--lambda-xent', type=float, default=1,
                         help="weight to balance cross entropy loss")
-    parser.add_argument('--lambda-htri', type=float, default=0.1,
+    parser.add_argument('--lambda-htri', type=float, default=4,
                         help="weight to balance hard triplet loss")
 
     # ************************************************************

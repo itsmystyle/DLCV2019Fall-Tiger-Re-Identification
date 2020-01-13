@@ -6,13 +6,14 @@ import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
 from module.dataset import ImageDataset
-from args import argument_parser, image_dataset_kwargs, optimizer_kwargs
+from args import argument_parser, optimizer_kwargs
 import resnet
+from hard_mine_triplet_loss import CenterLoss
 from eval_metrics import evaluate
 from of_penalty import OFPenalty
 from tqdm import tqdm
 from regularizer import get_regularizer
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import pdb
 
 parser = argument_parser()
@@ -180,11 +181,12 @@ def pesudo_label(model, left, idx2id):
     #pdb.set_trace()
     with torch.no_grad():
         for idx, package in enumerator:
-            (imgs, _, paths) = package
+            (imgs, pids, paths) = package
             if cuda:
                 imgs = imgs.cuda()
+                pids = pids.cuda()
             
-            features = model(imgs)[0]
+            features = model(imgs, pids)[0]
 
             for i in range(features.shape[0]):
                 pl = closet_node(features[i], feat_list).cpu().item()
@@ -228,10 +230,11 @@ def test(model, query, gallery, epoch,\
                 (imgs, pids, _) = package
                 if cuda:
                     imgs = imgs.cuda()
+                    pids = pids.cuda()
 
-                features = model(imgs)[0]
-
-                if epoch > 100:
+                features = model(imgs, pids)[0]
+                '''
+                if epoch > 200:
                     for i in range(pids.shape[0]):
                         pid = pids[i].item()
                         if  pid not in imgs_feat:
@@ -240,7 +243,7 @@ def test(model, query, gallery, epoch,\
                         else:
                             imgs_feat[pid] += features[0][i].cpu().detach()
                             id_count[pid] +=1
-
+                '''
             features = features.data.cpu()
             qf.append(features)
             q_pids.extend(pids)
@@ -269,9 +272,11 @@ def test(model, query, gallery, epoch,\
                 (imgs, pids, _) = package
                 if cuda:
                     imgs = imgs.cuda()
+                    pids = pids.cuda()
 
-                features = model(imgs)[0]
-                if epoch > 100:
+                features = model(imgs, pids)[0]
+                '''
+                if epoch > 200:
                     for i in range(pids.shape[0]):
                         pid = pids[i].item()
                         if  pid not in imgs_feat:
@@ -280,7 +285,7 @@ def test(model, query, gallery, epoch,\
                         else:
                             imgs_feat[pid] += features[0][i].cpu().detach()
                             id_count[pid] +=1
-
+                '''
             features = features.data.cpu()
             gf.append(features)
             g_pids.extend(pids)
@@ -304,7 +309,7 @@ def test(model, query, gallery, epoch,\
     
     '''
     distmat = re_ranking(
-            qf, gf, k1=20, k2=6, lambda_value=0.3
+            qf, gf, k1=25, k2=6, lambda_value=0.3
         )
     
     preds = distmat.argmin(axis=1)
@@ -351,8 +356,10 @@ scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize,\
 if cuda:
     model = nn.DataParallel(model).cuda()
 
-
-for epoch in range(99):
+device = torch.device("cuda" if cuda else "cpu")
+center_loss = CenterLoss(len(dataset.id2idx), 3072, device=device)
+_best = 0
+for epoch in range(350):
 
     model.train()
     '''
@@ -382,14 +389,17 @@ for epoch in range(99):
             label = label.cuda()
 
         of_penalty = OFPenalty(vars(args))
-        output = model(imgs)
+        output = model(imgs, label)
         loss = criterion(output, label)
         reg = regularizer(model)
         loss += reg
+        center = center_loss(output[0], label)
+        loss += 0.001 * center
         penalty = of_penalty(output)
         loss += penalty
         #pdb.set_trace()
-        if epoch > 100:
+        '''
+        if epoch > 200:
             ids = label.cpu().detach()
             for i in range(ids.shape[0]):
                 id = ids[i].item()
@@ -399,7 +409,7 @@ for epoch in range(99):
                 else:
                     imgs_feat[id] += output[0][i].cpu().detach()
                     id_count[id] += 1
-            
+        '''
         #optimizer.zero_grad()
         loss.backward()
 
@@ -419,6 +429,11 @@ for epoch in range(99):
     if epoch % 1 == 0:
         rank1 = test(model, query_dataloader, gallery_dataloader, epoch)
         print(rank1)
-
-    if epoch > 100:
+    
+    if _best < rank1:
+        _best = rank1
+        torch.save(model.state_dict(), os.path.join("./ctal_2", 'model_{}.pth.tar'.format(epoch)))
+    '''
+    if epoch > 200:
         pesudo_label(model, left_dataloader, dataset.idx2id)
+    '''
